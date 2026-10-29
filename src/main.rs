@@ -4,6 +4,7 @@ mod audio;
 mod config;
 mod engine;
 mod history;
+mod i18n;
 mod languages;
 mod protocol;
 

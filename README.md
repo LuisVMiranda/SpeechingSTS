@@ -12,6 +12,7 @@ The app keeps keys in memory only, so enter the key again after restarting. Othe
 
 ## Conversation and controls
 
+- **Interface language** in Settings switches the app between English, Spanish, and Brazilian Portuguese. Save settings to keep the choice between launches. This is separate from the language being practiced, which is chosen below it.
 - The voice selector offers 30 named Gemini voices with descriptions, or the OpenAI Realtime voice list. Voice, language, provider, model, and endpoint apply to the next session.
 - Search for a supported language in settings and choose a suggestion. The options follow the selected provider; custom endpoints and individual models can differ in language quality or availability. The lists are based on [Gemini Live language support](https://ai.google.dev/gemini-api/docs/live-api/capabilities#supported_languages) and [OpenAI's documented speech languages](https://developers.openai.com/api/docs/guides/text-to-speech#supported-languages).
 - **Speaking pace** asks the model to change its delivery and also adjusts the streamed audio locally using pitch-preserving time stretching. The slower settings are more distinct. Changes apply to the next conversation. Extreme settings can introduce some audio artifacts or latency, but they do not deliberately change the speaker's pitch.

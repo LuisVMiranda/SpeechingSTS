@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 impl App {
     fn top_bar(&mut self, ui: &mut egui::Ui) {
         let colors = palette(self.settings.theme);
+        let lang = self.settings.ui_language;
         ui.horizontal(|ui| {
             if !self.settings.minimal {
                 ui.label(
@@ -18,12 +19,12 @@ impl App {
                 );
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if icon_button(ui, Icon::Settings, self.settings_open)
-                    .on_hover_text(if self.settings_open {
+                if icon_button(ui, Icon::Settings, self.settings_open, lang)
+                    .on_hover_text(lang.text(if self.settings_open {
                         "Close settings"
                     } else {
                         "Open settings"
-                    })
+                    }))
                     .clicked()
                 {
                     self.settings_open = !self.settings_open;
@@ -31,12 +32,12 @@ impl App {
                         self.save_positions();
                     }
                 }
-                if icon_button(ui, Icon::Log, self.log_open)
-                    .on_hover_text(if self.log_open {
+                if icon_button(ui, Icon::Log, self.log_open, lang)
+                    .on_hover_text(lang.text(if self.log_open {
                         "Close conversation log"
                     } else {
                         "Open conversation log"
-                    })
+                    }))
                     .clicked()
                 {
                     self.log_open = !self.log_open;
@@ -44,12 +45,12 @@ impl App {
                         self.save_positions();
                     }
                 }
-                if icon_button(ui, Icon::Eye, self.settings.minimal)
-                    .on_hover_text(if self.settings.minimal {
+                if icon_button(ui, Icon::Eye, self.settings.minimal, lang)
+                    .on_hover_text(lang.text(if self.settings.minimal {
                         "Show bubbles"
                     } else {
                         "Hide conversation text"
-                    })
+                    }))
                     .clicked()
                 {
                     self.settings.minimal = !self.settings.minimal;
@@ -59,12 +60,12 @@ impl App {
                     }
                 }
                 if self.connected
-                    && icon_button(ui, Icon::Mic, self.muted)
-                        .on_hover_text(if self.muted {
+                    && icon_button(ui, Icon::Mic, self.muted, lang)
+                        .on_hover_text(lang.text(if self.muted {
                             "Unmute microphone"
                         } else {
                             "Mute microphone"
-                        })
+                        }))
                         .clicked()
                 {
                     self.muted = !self.muted;
@@ -88,11 +89,11 @@ impl App {
         let hit_area = Rect::from_center_size(rect.center(), Vec2::splat(radius * 2.0 + 20.0));
         let response = ui.interact(hit_area, ui.id().with("main-microphone"), Sense::click());
         let active = self.session.is_some();
-        let label = if active {
+        let label = self.settings.ui_language.text(if active {
             "End conversation"
         } else {
             "Start conversation"
-        };
+        });
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::WidgetType::Button, !self.stopping, label)
         });
@@ -234,27 +235,41 @@ impl App {
 
     fn language_selector(&mut self, ui: &mut egui::Ui) {
         let colors = palette(self.settings.theme);
+        let lang = self.settings.ui_language;
         let valid =
             crate::languages::canonical(self.settings.provider, &self.settings.language).is_some();
-        ui.horizontal(|ui| {
-            ui.label("Language");
+        ui.horizontal_wrapped(|ui| {
+            ui.label(lang.text("Practice language"));
             if !valid {
                 ui.label(
-                    RichText::new("Choose a supported language")
+                    RichText::new(lang.text("Choose a supported language"))
                         .size(11.0)
                         .color(colors.error),
                 );
             }
         });
         let response = ui.add(
-            egui::TextEdit::singleline(&mut self.settings.language)
+            egui::TextEdit::singleline(&mut self.language_input)
                 .desired_width(f32::INFINITY)
-                .hint_text("Search supported languages"),
+                .hint_text(lang.text("Search supported languages")),
         );
         if response.gained_focus() || response.changed() {
             self.language_suggestions_open = true;
         }
-        let matching = crate::languages::matching(self.settings.provider, &self.settings.language);
+        if response.changed() {
+            self.settings.language = crate::languages::canonical_localized(
+                self.settings.provider,
+                &self.language_input,
+                lang,
+            )
+            .map(str::to_owned)
+            .unwrap_or_else(|| self.language_input.clone());
+        }
+        let matching = crate::languages::matching_localized(
+            self.settings.provider,
+            &self.language_input,
+            lang,
+        );
         let mut open = self.language_suggestions_open;
         let mut selected = None;
         egui::Popup::from_response(&response)
@@ -271,7 +286,7 @@ impl App {
                 ui.set_min_width((response.rect.width() - 16.0).max(100.0));
                 if matching.is_empty() {
                     ui.label(
-                        RichText::new("No matches. Try another language.")
+                        RichText::new(lang.text("No matches. Try another language."))
                             .size(12.0)
                             .color(colors.muted),
                     );
@@ -280,7 +295,7 @@ impl App {
                         .max_height(180.0)
                         .show(ui, |ui| {
                             for language in matching {
-                                if ui.selectable_label(false, language).clicked() {
+                                if ui.selectable_label(false, lang.text(language)).clicked() {
                                     selected = Some(language);
                                 }
                             }
@@ -289,6 +304,7 @@ impl App {
             });
         if let Some(language) = selected {
             self.settings.language = language.to_owned();
+            self.language_input = lang.text(language).to_owned();
             open = false;
         }
         self.language_suggestions_open = open;
@@ -302,8 +318,9 @@ impl App {
         let mut save = false;
         let mut position = None;
         let colors = palette(self.settings.theme);
+        let lang = self.settings.ui_language;
         let mut builder = ViewportBuilder::default()
-            .with_title("Speeching settings")
+            .with_title(lang.text("Speeching settings"))
             .with_inner_size([460.0, 690.0])
             .with_min_inner_size([360.0, 400.0]);
         if let Some(pos) = self.window_positions.settings {
@@ -329,80 +346,95 @@ impl App {
                 .frame(egui::Frame::new().fill(colors.paper).inner_margin(egui::Margin::same(16)))
                 .show(child, |ui| {
                     let valid = crate::languages::canonical(self.settings.provider, &self.settings.language).is_some();
-                    if ui.add_enabled(valid, egui::Button::new(RichText::new("Save settings").color(Color32::WHITE).strong()).fill(BLUE).corner_radius(8.0).min_size(Vec2::new(130.0, 36.0))).clicked() { save = true; }
+                    if ui.add_enabled(valid, egui::Button::new(RichText::new(lang.text("Save settings")).color(Color32::WHITE).strong()).fill(BLUE).corner_radius(8.0).min_size(Vec2::new(130.0, 36.0))).clicked() { save = true; }
                 });
             egui::CentralPanel::default().frame(egui::Frame::new().fill(colors.paper).inner_margin(egui::Margin::same(20))).show(child, |ui| {
-                ui.label(RichText::new("Settings").size(22.0).strong().color(colors.ink));
-                ui.label(RichText::new("Make the conversation your own.").color(colors.muted));
+                ui.label(RichText::new(lang.text("Settings")).size(22.0).strong().color(colors.ink));
+                ui.label(RichText::new(lang.text("Make the conversation your own.")).color(colors.muted));
                 ui.add_space(10.0);
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("Appearance");
-                        ui.selectable_value(&mut self.settings.theme, Theme::Light, "Light");
-                        ui.selectable_value(&mut self.settings.theme, Theme::Dark, "Dark");
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(lang.text("Interface language"));
+                        egui::ComboBox::from_id_salt("interface-language")
+                            .selected_text(self.settings.ui_language.native_name())
+                            .show_ui(ui, |ui| {
+                                for option in UiLanguage::ALL {
+                                    ui.selectable_value(&mut self.settings.ui_language, option, option.native_name());
+                                }
+                            });
+                    });
+                    if lang != self.settings.ui_language {
+                        if let Some(name) = crate::languages::canonical(self.settings.provider, &self.settings.language) {
+                            self.language_input = self.settings.ui_language.text(name).to_owned();
+                        }
+                    }
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(lang.text("Appearance"));
+                        ui.selectable_value(&mut self.settings.theme, Theme::Light, lang.text("Light"));
+                        ui.selectable_value(&mut self.settings.theme, Theme::Dark, lang.text("Dark"));
                     });
                     ui.add_space(8.0); ui.separator(); ui.add_space(8.0);
-                    ui.label(RichText::new("Practice").size(15.0).strong());
+                    ui.label(RichText::new(lang.text("Practice")).size(15.0).strong());
                     self.language_selector(ui);
-                    ui.horizontal(|ui| { ui.label("Level"); egui::ComboBox::from_id_salt("level").selected_text(&self.settings.level).show_ui(ui, |ui| { for level in ["Beginner", "Intermediate", "Advanced"] { ui.selectable_value(&mut self.settings.level, level.into(), level); } }); });
-                    ui.horizontal(|ui| {
-                        ui.label("Speaking pace");
-                        egui::ComboBox::from_id_salt("pace").selected_text(pace_label(self.settings.speed)).show_ui(ui, |ui| {
-                            for (value, label) in [(0.75,"Very slow"),(0.82,"A little slower"),(1.0,"Natural"),(1.15,"A little faster"),(1.3,"Fast")] { ui.selectable_value(&mut self.settings.speed, value, label); }
+                    ui.horizontal_wrapped(|ui| { ui.label(lang.text("Level")); egui::ComboBox::from_id_salt("level").selected_text(lang.text(&self.settings.level)).show_ui(ui, |ui| { for level in ["Beginner", "Intermediate", "Advanced"] { ui.selectable_value(&mut self.settings.level, level.into(), lang.text(level)); } }); });
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(lang.text("Speaking pace"));
+                        egui::ComboBox::from_id_salt("pace").selected_text(lang.text(pace_label(self.settings.speed))).show_ui(ui, |ui| {
+                            for (value, label) in [(0.75,"Very slow"),(0.82,"A little slower"),(1.0,"Natural"),(1.15,"A little faster"),(1.3,"Fast")] { ui.selectable_value(&mut self.settings.speed, value, lang.text(label)); }
                         });
                     });
-                    ui.label(RichText::new("Adjusts the partner's speech while preserving voice pitch. Applies to the next conversation.").size(12.0).color(colors.muted));
-                    ui.label("Your instructions");
-                    ui.add(egui::TextEdit::multiline(&mut self.settings.instructions).desired_rows(3).desired_width(f32::INFINITY).hint_text("e.g. Correct my mistakes gently and ask about everyday life"));
-                    ui.label(RichText::new("Added to the partner's system instructions for the next conversation.").size(12.0).color(colors.muted));
+                    ui.label(RichText::new(lang.text("Adjusts the partner's speech while preserving voice pitch. Applies to the next conversation.")).size(12.0).color(colors.muted));
+                    ui.label(lang.text("Your instructions"));
+                    ui.add(egui::TextEdit::multiline(&mut self.settings.instructions).desired_rows(3).desired_width(f32::INFINITY).hint_text(lang.text("e.g. Correct my mistakes gently and ask about everyday life")));
+                    ui.label(RichText::new(lang.text("Added to the partner's system instructions for the next conversation.")).size(12.0).color(colors.muted));
                     ui.add_space(8.0); ui.separator(); ui.add_space(8.0);
-                    ui.label(RichText::new("Microphone").size(15.0).strong());
+                    ui.label(RichText::new(lang.text("Microphone")).size(15.0).strong());
                     ui.horizontal_wrapped(|ui| {
-                        ui.selectable_value(&mut self.settings.input_mode, InputMode::VoiceActivated, "Voice activated");
-                        ui.selectable_value(&mut self.settings.input_mode, InputMode::PushToTalk, "Push to talk");
+                        ui.selectable_value(&mut self.settings.input_mode, InputMode::VoiceActivated, lang.text("Voice activated"));
+                        ui.selectable_value(&mut self.settings.input_mode, InputMode::PushToTalk, lang.text("Push to talk"));
                     });
                     if self.settings.input_mode == InputMode::PushToTalk {
-                        ui.horizontal(|ui| {
-                            ui.label("Shortcut");
-                            let label = if self.shortcut_capture { "Press a key combination…".to_owned() } else { self.settings.push_to_talk_shortcut.label() };
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(lang.text("Shortcut"));
+                            let label = if self.shortcut_capture { lang.text("Press a key combination…").to_owned() } else { self.settings.push_to_talk_shortcut.label_in(lang) };
                             if ui.button(label).clicked() { self.shortcut_capture = true; }
                         });
-                        ui.label(RichText::new(if self.shortcut_capture { "Press a key with optional Ctrl, Alt or Shift. Esc cancels." } else { "Hold this shortcut while the main window is focused; release to send." }).size(12.0).color(colors.muted));
+                        ui.label(RichText::new(lang.text(if self.shortcut_capture { "Press a key with optional Ctrl, Alt or Shift. Esc cancels." } else { "Hold this shortcut while the main window is focused; release to send." })).size(12.0).color(colors.muted));
                     } else {
                         self.shortcut_capture = false;
-                        ui.label(RichText::new("Speech is detected automatically.").size(12.0).color(colors.muted));
+                        ui.label(RichText::new(lang.text("Speech is detected automatically.")).size(12.0).color(colors.muted));
                     }
-                    ui.checkbox(&mut self.settings.noise_gate_enabled, "Reduce quiet background noise");
+                    ui.checkbox(&mut self.settings.noise_gate_enabled, lang.text("Reduce quiet background noise"));
                     ui.add_enabled_ui(self.settings.noise_gate_enabled, |ui| {
-                        ui.add(egui::Slider::new(&mut self.settings.noise_gate_db, -65.0..=-20.0).text("Noise threshold").suffix(" dB").step_by(1.0));
+                        ui.add(egui::Slider::new(&mut self.settings.noise_gate_db, -65.0..=-20.0).text(lang.text("Noise threshold")).suffix(" dB").step_by(1.0));
                     });
-                    ui.label(RichText::new("Raise the threshold for a noisier room; too high can suppress quiet speech.").size(12.0).color(colors.muted));
+                    ui.label(RichText::new(lang.text("Raise the threshold for a noisier room; too high can suppress quiet speech.")).size(12.0).color(colors.muted));
                     ui.add_space(8.0); ui.separator(); ui.add_space(8.0);
-                    ui.horizontal(|ui| {
-                        ui.add(egui::Slider::new(&mut self.settings.fade_seconds, 2.0..=30.0).text("Bubble lifetime").suffix(" s").step_by(1.0));
-                        if ui.small_button("Reset to 8 s").clicked() { self.settings.fade_seconds = 8.0; }
+                    ui.horizontal_wrapped(|ui| {
+                        ui.add(egui::Slider::new(&mut self.settings.fade_seconds, 2.0..=30.0).text(lang.text("Bubble lifetime")).suffix(" s").step_by(1.0));
+                        if ui.small_button(lang.text("Reset to 8 s")).clicked() { self.settings.fade_seconds = 8.0; }
                     });
-                    ui.checkbox(&mut self.settings.minimal, "Hide conversation text");
+                    ui.checkbox(&mut self.settings.minimal, lang.text("Hide conversation text"));
                     ui.add_space(8.0); ui.separator(); ui.add_space(8.0);
-                    ui.label(RichText::new("Provider").size(15.0).strong());
-                    ui.horizontal(|ui| { ui.selectable_value(&mut self.settings.provider, Provider::Gemini, "Gemini Live"); ui.selectable_value(&mut self.settings.provider, Provider::OpenAi, "OpenAI Realtime"); });
+                    ui.label(RichText::new(lang.text("Provider")).size(15.0).strong());
+                    ui.horizontal_wrapped(|ui| { ui.selectable_value(&mut self.settings.provider, Provider::Gemini, "Gemini Live"); ui.selectable_value(&mut self.settings.provider, Provider::OpenAi, "OpenAI Realtime"); });
                     let (url, model, voice, key) = match self.settings.provider {
                         Provider::Gemini => (&mut self.settings.gemini_url, &mut self.settings.gemini_model, &mut self.settings.gemini_voice, &mut self.gemini_key),
                         Provider::OpenAi => (&mut self.settings.openai_url, &mut self.settings.openai_model, &mut self.settings.openai_voice, &mut self.openai_key),
                     };
-                    ui.label("WebSocket URL"); ui.add(egui::TextEdit::singleline(url).desired_width(f32::INFINITY));
-                    ui.label("Model"); ui.add(egui::TextEdit::singleline(model).desired_width(f32::INFINITY));
-                    ui.label("API key"); ui.add(egui::TextEdit::singleline(key).password(true).hint_text("Paste API key (not saved)").desired_width(f32::INFINITY));
-                    ui.label("Voice");
+                    ui.label(lang.text("WebSocket URL")); ui.add(egui::TextEdit::singleline(url).desired_width(f32::INFINITY));
+                    ui.label(lang.text("Model")); ui.add(egui::TextEdit::singleline(model).desired_width(f32::INFINITY));
+                    ui.label(lang.text("API key")); ui.add(egui::TextEdit::singleline(key).password(true).hint_text(lang.text("Paste API key (not saved)")).desired_width(f32::INFINITY));
+                    ui.label(lang.text("Voice"));
                     egui::ComboBox::from_id_salt("voice").selected_text(format!("{}  {}", voice_symbol(self.settings.provider, voice), voice)).width(230.0).show_ui(ui, |ui| {
                         match self.settings.provider {
-                            Provider::Gemini => for (name, description) in GEMINI_VOICES { ui.selectable_value(voice, (*name).to_owned(), format!("{}  {name} · {description}", voice_symbol(Provider::Gemini, name))); },
+                            Provider::Gemini => for (name, description) in GEMINI_VOICES { ui.selectable_value(voice, (*name).to_owned(), format!("{}  {name} · {}", voice_symbol(Provider::Gemini, name), voice_description(lang, description))); },
                             Provider::OpenAi => for name in OPENAI_VOICES { ui.selectable_value(voice, (*name).to_owned(), format!("{}  {name}", voice_symbol(Provider::OpenAi, name))); },
                         }
                     });
-                    ui.label(RichText::new("Voice symbols describe perceived register; individual perception can vary.").size(12.0).color(colors.muted));
-                    ui.label(RichText::new("Your key is sent to this URL and kept only in memory. Custom endpoints must use the selected provider's live protocol.").size(12.0).color(colors.muted));
-                    ui.label(RichText::new("Provider, language, voice and pace changes apply to the next conversation.").size(12.0).color(colors.muted));
+                    ui.label(RichText::new(lang.text("Voice symbols describe perceived register; individual perception can vary.")).size(12.0).color(colors.muted));
+                    ui.label(RichText::new(lang.text("Your key is sent to this URL and kept only in memory. Custom endpoints must use the selected provider's live protocol.")).size(12.0).color(colors.muted));
+                    ui.label(RichText::new(lang.text("Provider, language, voice and pace changes apply to the next conversation.")).size(12.0).color(colors.muted));
                     ui.add_space(10.0);
                 });
             });
@@ -448,13 +480,14 @@ impl App {
         let mut selected_id: Option<String> = None;
         let mut position = None;
         let colors = palette(self.settings.theme);
+        let lang = self.settings.ui_language;
         let accent = if self.settings.theme == Theme::Dark {
             Color32::from_rgb(145, 186, 255)
         } else {
             BLUE
         };
         let mut builder = ViewportBuilder::default()
-            .with_title("Speeching conversation log")
+            .with_title(lang.text("Speeching conversation log"))
             .with_inner_size([440.0, 510.0])
             .with_min_inner_size([320.0, 300.0]);
         if let Some(pos) = self.window_positions.log {
@@ -479,64 +512,64 @@ impl App {
                             .inner_margin(egui::Margin::same(20)),
                     )
                     .show(child, |ui| {
-                        ui.label(RichText::new("Conversation log").size(21.0).strong());
-                        ui.label(RichText::new("Conversations are saved locally on this computer.").color(colors.muted));
+                        ui.label(RichText::new(lang.text("Conversation log")).size(21.0).strong());
+                        ui.label(RichText::new(lang.text("Conversations are saved locally on this computer.")).color(colors.muted));
                         ui.add_space(8.0);
                         ui.horizontal_wrapped(|ui| {
                             let can_change = self.session.is_none();
-                            if ui.add_enabled(can_change, egui::Button::new("New conversation")).clicked() { self.new_chat(); }
-                            if ui.add_enabled(can_change, egui::Button::new(if self.library_open { "Close saved chats" } else { "Saved chats…" })).clicked() {
+                            if ui.add_enabled(can_change, egui::Button::new(lang.text("New conversation"))).clicked() { self.new_chat(); }
+                            if ui.add_enabled(can_change, egui::Button::new(lang.text(if self.library_open { "Close saved chats" } else { "Saved chats…" }))).clicked() {
                                 self.library_open = !self.library_open;
                                 if self.library_open { self.refresh_library(); }
                             }
                         });
                         if self.library_open {
                             ui.add_space(5.0);
-                            ui.add(egui::TextEdit::singleline(&mut self.library_query).hint_text("Search saved conversations").desired_width(f32::INFINITY));
-                            if !self.library_warning.is_empty() { ui.label(RichText::new(&self.library_warning).size(12.0).color(colors.error)); }
-                            let query = self.library_query.trim().to_lowercase();
-                            let matching: Vec<_> = self.library.iter().filter(|chat| query.is_empty() || chat.title.to_lowercase().contains(&query) || chat.language.to_lowercase().contains(&query) || chat.sessions.iter().any(|s| s.messages.iter().any(|m| m.text.to_lowercase().contains(&query)))).collect();
+                            ui.add(egui::TextEdit::singleline(&mut self.library_query).hint_text(lang.text("Search saved conversations")).desired_width(f32::INFINITY));
+                            if !self.library_warning.is_empty() { ui.label(RichText::new(lang.message(&self.library_warning)).size(12.0).color(colors.error)); }
+                            let query = crate::languages::fold(&self.library_query);
+                            let matching: Vec<_> = self.library.iter().filter(|chat| query.is_empty() || crate::languages::fold(chat_title(chat, lang)).contains(&query) || crate::languages::fold(lang.text(&chat.language)).contains(&query) || crate::languages::fold(&chat.language).contains(&query) || chat.sessions.iter().any(|s| s.messages.iter().any(|m| crate::languages::fold(&m.text).contains(&query)))).collect();
                             egui::ScrollArea::vertical().id_salt("saved-chats").max_height(180.0).show(ui, |ui| {
-                                if matching.is_empty() { ui.label(RichText::new("No conversations found.").color(colors.muted)); }
+                                if matching.is_empty() { ui.label(RichText::new(lang.text("No conversations found.")).color(colors.muted)); }
                                 for chat in matching {
                                     let is_selected = self.selected_chat.as_ref().is_some_and(|selected| selected.id == chat.id);
-                                    if ui.selectable_label(is_selected, &chat.title).clicked() { selected_id = Some(chat.id.clone()); }
-                                    let voice = chat.sessions.last().map(|session| session.voice.as_str()).unwrap_or("Voice");
-                                    ui.label(RichText::new(format!("{} · {} · {}", chat.language, voice, age_label(chat.updated_at))).size(11.0).color(colors.muted));
+                                    if ui.selectable_label(is_selected, chat_title(chat, lang)).clicked() { selected_id = Some(chat.id.clone()); }
+                                    let voice = chat.sessions.last().map(|session| session.voice.as_str()).unwrap_or(lang.text("Voice"));
+                                    ui.label(RichText::new(format!("{} · {} · {}", lang.text(&chat.language), voice, age_label(chat.updated_at, lang))).size(11.0).color(colors.muted));
                                     ui.add_space(4.0);
                                 }
                             });
                         } else if let Some(chat) = &self.selected_chat {
-                            ui.label(RichText::new(format!("Selected: {}", chat.title)).size(12.0).color(accent));
+                            ui.label(RichText::new(lang.format("Selected: {0}", chat_title(chat, lang))).size(12.0).color(accent));
                             if self.history_truncated {
-                                ui.label(RichText::new("Recent messages will be sent; older messages remain in the log.").size(11.0).color(colors.muted));
+                                ui.label(RichText::new(lang.text("Recent messages will be sent; older messages remain in the log.")).size(11.0).color(colors.muted));
                             } else {
-                                ui.label(RichText::new("Previous messages will be sent to your provider when you start.").size(11.0).color(colors.muted));
+                                ui.label(RichText::new(lang.text("Previous messages will be sent to your provider when you start.")).size(11.0).color(colors.muted));
                             }
                         } else {
-                            ui.label(RichText::new("New conversation · choose a saved chat to continue it.").size(12.0).color(colors.muted));
+                            ui.label(RichText::new(lang.text("New conversation · choose a saved chat to continue it.")).size(12.0).color(colors.muted));
                         }
                         ui.add_space(6.0);
                         ui.horizontal_wrapped(|ui| {
                             let has_text = !self.transcript.sessions.is_empty();
                             if ui
-                                .add_enabled(has_text, egui::Button::new("Copy"))
+                                .add_enabled(has_text, egui::Button::new(lang.text("Copy")))
                                 .clicked()
                             {
-                                ui.ctx().copy_text(self.transcript.text());
+                                ui.ctx().copy_text(self.transcript.text(lang));
                                 self.status = "Conversation copied".into();
                                 self.log_feedback = "Copied to clipboard".into();
                             }
                             if ui
-                                .add_enabled(has_text, egui::Button::new("Download"))
+                                .add_enabled(has_text, egui::Button::new(lang.text("Download")))
                                 .clicked()
                             {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .set_file_name("speeching-conversation.txt")
-                                    .add_filter("Text file", &["txt"])
+                                    .add_filter(lang.text("Text file"), &["txt"])
                                     .save_file()
                                 {
-                                    match std::fs::write(path, self.transcript.text()) {
+                                    match std::fs::write(path, self.transcript.text(lang)) {
                                         Ok(()) => {
                                             self.status = "Conversation saved".into();
                                             self.log_feedback = "Conversation saved".into();
@@ -551,7 +584,7 @@ impl App {
                                 }
                             }
                             if ui
-                                .add_enabled(has_text, egui::Button::new("Clear"))
+                                .add_enabled(has_text, egui::Button::new(lang.text("Clear")))
                                 .clicked()
                             {
                                 self.transcript.clear();
@@ -564,7 +597,7 @@ impl App {
                         });
                         if !self.log_feedback.is_empty() {
                             ui.label(
-                                RichText::new(&self.log_feedback)
+                                RichText::new(lang.message(&self.log_feedback))
                                     .size(12.0)
                                     .color(colors.muted),
                             );
@@ -577,7 +610,7 @@ impl App {
                                 if self.transcript.sessions.is_empty() {
                                     ui.add_space(18.0);
                                     ui.label(
-                                        RichText::new("Your conversation log will appear here.")
+                                        RichText::new(lang.text("Your conversation log will appear here."))
                                             .color(colors.muted),
                                     );
                                 }
@@ -586,7 +619,8 @@ impl App {
                                     ui.add_space(12.0);
                                     ui.label(
                                         RichText::new(format!(
-                                            "Conversation · {}",
+                                            "{} · {}",
+                                            lang.text("Conversation"),
                                             format_duration(session.clock.elapsed(Instant::now()))
                                         ))
                                         .size(12.0)
@@ -600,7 +634,7 @@ impl App {
                                     {
                                         ui.add_space(10.0);
                                         ui.label(
-                                            RichText::new(self.transcript.speaker_name(line))
+                                            RichText::new(self.transcript.speaker_name(line, lang))
                                                 .strong()
                                                 .color(accent),
                                         );
@@ -652,7 +686,7 @@ impl App {
             root.top() - overlay_height
         };
         let builder = ViewportBuilder::default()
-            .with_title("Speeching bubbles")
+            .with_title(self.settings.ui_language.text("Speeching bubbles"))
             .with_inner_size([root.width().max(300.0), overlay_height])
             .with_position([root.left(), top])
             .with_decorations(false)
@@ -678,6 +712,7 @@ impl App {
                             self.settings.fade_seconds,
                             now,
                             self.settings.theme,
+                            self.settings.ui_language,
                         );
                     });
             },
@@ -696,6 +731,7 @@ impl eframe::App for App {
             apply_theme(&ctx, self.applied_theme);
         }
         let colors = palette(self.settings.theme);
+        let lang = self.settings.ui_language;
         if !self.initial_positioned {
             let viewport = ctx.input(|input| input.viewport().clone());
             if let (Some(rect), Some(monitor)) = (viewport.outer_rect, viewport.monitor_size) {
@@ -760,17 +796,17 @@ impl eframe::App for App {
                 self.microphone(ui, circle_size);
                 if !self.settings.minimal {
                     let label = if self.error || !self.connected {
-                        self.status.clone()
+                        lang.message(&self.status)
                     } else if self.muted {
-                        "Microphone muted".into()
+                        lang.text("Microphone muted").into()
                     } else if self.active_input_mode == InputMode::PushToTalk && self.talking {
-                        format!("Release {} to send", self.active_shortcut.label())
+                        lang.format("Release {0} to send", &self.active_shortcut.label_in(lang))
                     } else if self.indicator.speaking {
-                        "Speaking…".into()
+                        lang.text("Speaking…").into()
                     } else if self.active_input_mode == InputMode::PushToTalk {
-                        format!("Hold {} to speak", self.active_shortcut.label())
+                        lang.format("Hold {0} to speak", &self.active_shortcut.label_in(lang))
                     } else {
-                        "Listening…".into()
+                        lang.text("Listening…").into()
                     };
                     ui.vertical_centered(|ui| {
                         ui.label(RichText::new(label).size(13.0).color(if self.error {
@@ -781,7 +817,7 @@ impl eframe::App for App {
                         ui.label(
                             RichText::new(format!(
                                 "{} · {}",
-                                self.settings.language,
+                                lang.text(&self.settings.language),
                                 if self.session.is_some() {
                                     self.active_voice.as_str()
                                 } else {
@@ -801,7 +837,7 @@ impl eframe::App for App {
                         }
                     });
                 } else if self.error {
-                    ui.colored_label(colors.error, &self.status);
+                    ui.colored_label(colors.error, lang.message(&self.status));
                 }
                 ui.add_space(5.0);
                 let wave_height = ui.available_height().clamp(30.0, 75.0);
@@ -841,6 +877,14 @@ fn voice_symbol(provider: Provider, voice: &str) -> &'static str {
     }
 }
 
+fn voice_description<'a>(language: UiLanguage, description: &'a str) -> &'a str {
+    if description == "Clear" && language != UiLanguage::English {
+        language.text("Clear voice")
+    } else {
+        language.text(description)
+    }
+}
+
 fn is_modifier_key(key: egui::Key) -> bool {
     matches!(
         key,
@@ -855,16 +899,32 @@ fn is_modifier_key(key: egui::Key) -> bool {
     )
 }
 
-fn age_label(timestamp: u64) -> String {
+fn chat_title(chat: &ChatRecord, language: UiLanguage) -> &str {
+    if chat.title == "New conversation"
+        && !chat.sessions.iter().any(|s| {
+            s.messages
+                .iter()
+                .any(|m| m.speaker == Speaker::User && !m.text.trim().is_empty())
+        })
+    {
+        language.text("New conversation")
+    } else {
+        &chat.title
+    }
+}
+
+fn age_label(timestamp: u64, language: UiLanguage) -> String {
     let seconds = history::timestamp().saturating_sub(timestamp);
     if seconds < 60 {
-        "Just now".into()
+        language.text("Just now").into()
     } else if seconds < 3600 {
-        format!("{} min ago", seconds / 60)
+        language.format("{0} min ago", &(seconds / 60).to_string())
     } else if seconds < 86_400 {
-        format!("{} h ago", seconds / 3600)
+        language.format("{0} h ago", &(seconds / 3600).to_string())
+    } else if seconds < 172_800 {
+        language.text("1 day ago").into()
     } else {
-        format!("{} d ago", seconds / 86_400)
+        language.format("{0} d ago", &(seconds / 86_400).to_string())
     }
 }
 
@@ -915,6 +975,7 @@ fn paint_bubbles(
     seconds: f32,
     now: Instant,
     theme: Theme,
+    language: UiLanguage,
 ) {
     let painter = ui.painter_at(rect);
     let mut y = rect.bottom() - 4.0;
@@ -980,7 +1041,7 @@ fn paint_bubbles(
         painter.text(
             bubble.left_top() + Vec2::new(12.0, 7.0),
             egui::Align2::LEFT_TOP,
-            transcript.speaker_name(line),
+            transcript.speaker_name(line, language),
             FontId::proportional(11.0),
             if theme == Theme::Dark {
                 Color32::from_rgba_unmultiplied(156, 193, 255, alpha)
@@ -1003,7 +1064,12 @@ enum Icon {
     Eye,
     Mic,
 }
-fn icon_button(ui: &mut egui::Ui, icon: Icon, active: bool) -> egui::Response {
+fn icon_button(
+    ui: &mut egui::Ui,
+    icon: Icon,
+    active: bool,
+    language: UiLanguage,
+) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(36.0), Sense::click());
     let label = match icon {
         Icon::Settings => "Settings",
@@ -1011,7 +1077,9 @@ fn icon_button(ui: &mut egui::Ui, icon: Icon, active: bool) -> egui::Response {
         Icon::Eye => "Toggle conversation text",
         Icon::Mic => "Toggle microphone",
     };
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, language.text(label))
+    });
     let painter = ui.painter();
     let dark = ui.visuals().dark_mode;
     let fill = if active {

@@ -1,3 +1,4 @@
+use crate::i18n::UiLanguage;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
@@ -43,7 +44,11 @@ impl Default for Shortcut {
     }
 }
 impl Shortcut {
+    #[cfg(test)]
     pub fn label(&self) -> String {
+        self.label_in(UiLanguage::English)
+    }
+    pub fn label_in(&self, language: UiLanguage) -> String {
         let mut parts = Vec::new();
         if self.ctrl {
             parts.push("Ctrl");
@@ -52,9 +57,9 @@ impl Shortcut {
             parts.push("Alt");
         }
         if self.shift {
-            parts.push("Shift");
+            parts.push(language.text("Shift"));
         }
-        parts.push(&self.key);
+        parts.push(language.text(&self.key));
         parts.join(" + ")
     }
     pub fn key(&self) -> eframe::egui::Key {
@@ -114,6 +119,7 @@ pub struct Settings {
     pub noise_gate_enabled: bool,
     pub noise_gate_db: f32,
     pub theme: Theme,
+    pub ui_language: UiLanguage,
     pub push_to_talk_shortcut: Shortcut,
 }
 impl Default for Settings {
@@ -137,6 +143,7 @@ impl Default for Settings {
             noise_gate_enabled: true,
             noise_gate_db: -42.0,
             theme: Theme::Light,
+            ui_language: UiLanguage::English,
             push_to_talk_shortcut: Shortcut::default(),
         }
     }
@@ -270,6 +277,13 @@ mod tests {
         assert_eq!(settings.fade_seconds, 8.0);
         assert_eq!(settings.speed, 0.82);
         assert_eq!(settings.language, "Spanish");
+        assert_eq!(settings.ui_language, UiLanguage::English);
+        let future = Settings::from_persisted(
+            r#"{"ui_language":"UnknownFutureLanguage","language":"Spanish"}"#,
+        )
+        .unwrap();
+        assert_eq!(future.ui_language, UiLanguage::English);
+        assert_eq!(future.language, "Spanish");
         assert_eq!(
             Settings::from_persisted(r#"{"fade_seconds":12.0}"#)
                 .unwrap()
@@ -287,6 +301,7 @@ mod tests {
     fn theme_shortcut_and_window_positions_round_trip() {
         let mut settings = Settings::default();
         settings.theme = Theme::Dark;
+        settings.ui_language = UiLanguage::PortugueseBrazil;
         settings.push_to_talk_shortcut = Shortcut {
             key: "K".into(),
             ctrl: true,
@@ -296,6 +311,7 @@ mod tests {
         let restored: Settings =
             serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
         assert_eq!(restored.theme, Theme::Dark);
+        assert_eq!(restored.ui_language, UiLanguage::PortugueseBrazil);
         assert_eq!(restored.push_to_talk_shortcut.label(), "Ctrl + Shift + K");
         assert_eq!(restored.push_to_talk_shortcut.key(), eframe::egui::Key::K);
         assert!(restored

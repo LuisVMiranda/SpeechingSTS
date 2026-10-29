@@ -292,6 +292,18 @@ mod tests {
         assert!(setup["setup"].get("outputAudioTranscription").is_some());
     }
     #[test]
+    fn interface_language_does_not_change_the_models_practice_language() {
+        let mut settings = Settings::default();
+        settings.language = "Spanish".into();
+        settings.ui_language = crate::i18n::UiLanguage::PortugueseBrazil;
+        let instruction = setup(&settings, None)["setup"]["systemInstruction"]["parts"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(instruction.contains("Practice in Spanish."));
+        assert!(!instruction.contains("Espanhol"));
+    }
+    #[test]
     fn pacing_is_sent_as_a_speaking_instruction_for_both_providers() {
         let mut settings = Settings::default();
         settings.speed = 0.75;

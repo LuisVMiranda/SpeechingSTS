@@ -6,6 +6,7 @@ use crate::{
     },
     engine::Session,
     history::{self, ChatRecord, ChatStore, MemoryMessage, SavedSession},
+    i18n::UiLanguage,
     protocol::{Event, Speaker},
 };
 use eframe::egui::{self, Color32, Vec2};
@@ -190,9 +191,9 @@ impl Transcript {
         }
         self.end_turn();
     }
-    fn speaker_name(&self, line: &Line) -> &str {
+    fn speaker_name<'a>(&'a self, line: &Line, language: UiLanguage) -> &'a str {
         if line.speaker == Speaker::User {
-            "You"
+            language.text("You")
         } else {
             &self.sessions[line.session].voice
         }
@@ -255,21 +256,22 @@ impl Transcript {
             self.current_session = Some(0);
         }
     }
-    fn text(&self) -> String {
+    fn text(&self, language: UiLanguage) -> String {
         let now = Instant::now();
         self.sessions
             .iter()
             .enumerate()
             .map(|(index, session)| {
                 let mut text = format!(
-                    "Conversation · {} · {}",
+                    "{} · {} · {}",
+                    language.text("Conversation"),
                     session.voice,
                     format_duration(session.clock.elapsed(now))
                 );
                 for line in self.lines.iter().filter(|line| line.session == index) {
                     text.push_str(&format!(
                         "\n\n{}: {}",
-                        self.speaker_name(line),
+                        self.speaker_name(line, language),
                         line.text.trim()
                     ));
                 }
@@ -343,6 +345,7 @@ pub struct App {
     indicator: SpeechIndicator,
     cue_started: bool,
     language_suggestions_open: bool,
+    language_input: String,
     active_input_mode: InputMode,
     talking: bool,
     idle_since: Instant,
@@ -366,6 +369,7 @@ pub struct App {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let settings = Settings::load();
+        let language_input = settings.ui_language.text(&settings.language).to_owned();
         let applied_theme = settings.theme;
         apply_theme(&cc.egui_ctx, applied_theme);
         Self {
@@ -387,6 +391,7 @@ impl App {
             indicator: SpeechIndicator::default(),
             cue_started: false,
             language_suggestions_open: false,
+            language_input,
             active_input_mode: InputMode::VoiceActivated,
             talking: false,
             idle_since: Instant::now(),
@@ -714,8 +719,16 @@ mod tests {
         assert_eq!(t.lines.len(), 2);
         t.finish_session(start + Duration::from_secs(71));
         assert_eq!(
-            t.text(),
+            t.text(UiLanguage::English),
             "Conversation · Aoede · 01:11\n\nYou: Hello!\n\nAoede: Hi."
+        );
+        assert_eq!(
+            t.text(UiLanguage::Spanish),
+            "Conversación · Aoede · 01:11\n\nTú: Hello!\n\nAoede: Hi."
+        );
+        assert_eq!(
+            t.text(UiLanguage::PortugueseBrazil),
+            "Conversa · Aoede · 01:11\n\nVocê: Hello!\n\nAoede: Hi."
         );
         t.clear();
         assert!(t.lines.is_empty());
@@ -737,7 +750,10 @@ mod tests {
         assert!(transcript.lines[0].historical);
         transcript.begin_session("Puck".into(), now);
         transcript.append(Speaker::Partner, "Hola".into(), None, false);
-        assert_eq!(transcript.speaker_name(&transcript.lines[1]), "Puck");
+        assert_eq!(
+            transcript.speaker_name(&transcript.lines[1], UiLanguage::English),
+            "Puck"
+        );
         assert!(!transcript.lines[1].historical);
     }
     #[test]
@@ -755,7 +771,7 @@ mod tests {
             false,
         );
         transcript.finish_session(start + Duration::from_secs(75));
-        let text = transcript.text();
+        let text = transcript.text(UiLanguage::English);
         assert!(text.contains("Conversation · Aoede · 00:10\n\nAoede: First"));
         assert!(text.contains("Conversation · Puck · 01:03\n\nPuck: Second"));
         transcript.begin_session("Leda".into(), start + Duration::from_secs(80));
