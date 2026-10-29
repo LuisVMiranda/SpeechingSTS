@@ -17,6 +17,7 @@ use std::{
 };
 
 use library_search::LibrarySearch;
+use library_view::ConversationView;
 use theme::{apply_theme, palette, BLUE};
 use transcript::{format_duration, ConversationClock, SpeechIndicator, Transcript};
 use windowing::WindowPlacement;
@@ -65,6 +66,7 @@ pub struct App {
     library_search: LibrarySearch,
     quick_chat_search: LibrarySearch,
     library_warning: String,
+    conversation_view: ConversationView,
     quick_chat_open: bool,
     quick_chat_query: String,
     history_dirty: bool,
@@ -155,6 +157,7 @@ impl App {
             library_search: LibrarySearch::default(),
             quick_chat_search: LibrarySearch::default(),
             library_warning: String::new(),
+            conversation_view: ConversationView::load(),
             quick_chat_open: false,
             quick_chat_query: String::new(),
             history_dirty: false,
@@ -484,10 +487,13 @@ impl Drop for App {
     }
 }
 
+mod date_time;
 mod events;
 mod interface;
 mod interface_helpers;
 mod library_search;
+mod library_ui;
+mod library_view;
 mod log;
 mod partner_name;
 mod quick_chat;

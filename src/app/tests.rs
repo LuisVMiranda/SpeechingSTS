@@ -213,7 +213,7 @@ fn automatic_log_opening_only_occurs_when_an_active_session_ends() {
         for event in [Event::Stopped, Event::Error("Connection lost".into())] {
             let mut settings = Settings::default();
             settings.open_log_after_conversation = enabled;
-            let store = credentials::Store::isolated("Speeching/test/auto-log");
+            let store = credentials::Store::empty_for_test();
             let mut app = App::with_settings_and_store(&context, settings, store);
             app.transcript.begin_session("Aoede".into(), Instant::now());
             let (sender, receiver) = mpsc::channel();
@@ -243,7 +243,7 @@ fn settings_and_log_render_the_preference_and_partner_name() {
         }
     }
     let context = eframe::CreationContext::_new_kittest(egui::Context::default());
-    let store = credentials::Store::isolated("Speeching/test/window-render");
+    let store = credentials::Store::empty_for_test();
     let mut app = App::with_settings_and_store(&context, Settings::default(), store);
     app.window_positions = WindowPositions::default();
     app.settings_section = SettingsSection::Appearance;

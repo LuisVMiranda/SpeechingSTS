@@ -40,6 +40,8 @@ fn retry_delete(
 pub struct Store {
     gemini: String,
     openai: String,
+    #[cfg(test)]
+    empty_test_store: bool,
 }
 
 impl Default for Store {
@@ -47,6 +49,8 @@ impl Default for Store {
         Self {
             gemini: "Speeching/Gemini".into(),
             openai: "Speeching/OpenAI".into(),
+            #[cfg(test)]
+            empty_test_store: false,
         }
     }
 }
@@ -57,6 +61,16 @@ impl Store {
         Self {
             gemini: format!("{namespace}/Gemini"),
             openai: format!("{namespace}/OpenAI"),
+            empty_test_store: false,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn empty_for_test() -> Self {
+        Self {
+            gemini: String::new(),
+            openai: String::new(),
+            empty_test_store: true,
         }
     }
 
@@ -68,6 +82,10 @@ impl Store {
     }
 
     pub fn load(&self, provider: Provider) -> Result<Option<String>, String> {
+        #[cfg(test)]
+        if self.empty_test_store {
+            return Ok(None);
+        }
         retry_read(
             || platform::read(self.target(provider)),
             |_| true,
@@ -75,6 +93,10 @@ impl Store {
         )
     }
     pub fn save(&self, provider: Provider, key: &str) -> Result<(), String> {
+        #[cfg(test)]
+        if self.empty_test_store {
+            return Err("The empty test credential store cannot save keys.".into());
+        }
         platform::write(self.target(provider), key)?;
         match retry_read(
             || platform::read(self.target(provider)),
@@ -86,6 +108,10 @@ impl Store {
         }
     }
     pub fn forget(&self, provider: Provider) -> Result<(), String> {
+        #[cfg(test)]
+        if self.empty_test_store {
+            return Err("The empty test credential store cannot remove keys.".into());
+        }
         retry_delete(
             || platform::delete(self.target(provider)),
             std::thread::sleep,
@@ -95,11 +121,15 @@ impl Store {
 
 #[cfg(windows)]
 mod platform {
-    use std::{ffi::c_void, io, ptr};
+    use std::{ffi::c_void, io, ptr, sync::Mutex};
     use windows_sys::Win32::Security::Credentials::{
         CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE,
         CRED_TYPE_GENERIC,
     };
+
+    // Concurrent Windows credential operations produced missing readbacks under load.
+    // Serialize individual calls within this process; retries still happen outside the lock.
+    static CREDENTIAL_ACCESS: Mutex<()> = Mutex::new(());
 
     fn wide(text: &str) -> Vec<u16> {
         text.encode_utf16().chain(Some(0)).collect()
@@ -112,6 +142,9 @@ mod platform {
     }
 
     pub fn read(name: &str) -> Result<Option<String>, String> {
+        let _guard = CREDENTIAL_ACCESS
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let name = wide(name);
         let mut entry: *mut CREDENTIALW = ptr::null_mut();
         // Windows allocates the returned credential; copy its blob before CredFree.
@@ -140,6 +173,9 @@ mod platform {
         }
     }
     pub fn write(name: &str, value: &str) -> Result<(), String> {
+        let _guard = CREDENTIAL_ACCESS
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         if value.trim().is_empty() {
             return Err("Enter an API key.".into());
         }
@@ -164,6 +200,9 @@ mod platform {
         }
     }
     pub fn delete(name: &str) -> Result<bool, String> {
+        let _guard = CREDENTIAL_ACCESS
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let name = wide(name);
         if unsafe { CredDeleteW(name.as_ptr(), CRED_TYPE_GENERIC, 0) } != 0 {
             Ok(true)

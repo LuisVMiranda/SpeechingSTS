@@ -30,9 +30,10 @@ impl Drop for TestDirectory {
 fn test_app(directory: &TestDirectory, settings: Settings) -> (App, egui::Context) {
     let ctx = egui::Context::default();
     let creation = eframe::CreationContext::_new_kittest(ctx.clone());
-    let credentials = credentials::Store::isolated("Speeching/test/quick-chat");
+    let credentials = credentials::Store::empty_for_test();
     let mut app = App::with_settings_and_store(&creation, settings, credentials);
     app.store = ChatStore::for_test(directory.0.clone());
+    app.conversation_view = ConversationView::for_test(directory.0.join("conversation-view.json"));
     (app, ctx)
 }
 
@@ -84,12 +85,15 @@ fn collect_text(shape: &egui::Shape, result: &mut Vec<(String, Rect)>) {
 }
 
 fn text_position(shapes: &[(String, Rect)], text: &str) -> Pos2 {
+    text_bounds(shapes, text).center()
+}
+
+fn text_bounds(shapes: &[(String, Rect)], text: &str) -> Rect {
     shapes
         .iter()
         .find(|(value, _)| value == text)
         .unwrap_or_else(|| panic!("Missing {text:?} in {shapes:?}"))
         .1
-        .center()
 }
 
 fn click(app: &mut App, ctx: &egui::Context, pos: Pos2) -> Vec<(String, Rect)> {
@@ -220,4 +224,102 @@ fn missing_saved_chat_is_reported_without_changing_selection() {
     assert_eq!(app.selected_chat.as_ref().unwrap().id, current.id);
     assert!(app.error);
     assert!(!app.status.is_empty());
+}
+
+#[cfg(windows)]
+#[test]
+fn picker_shows_dates_and_can_change_and_remember_sort_order() {
+    use super::super::library_view::SortOrder;
+    let directory = TestDirectory::new();
+    let (mut app, ctx) = test_app(&directory, Settings::default());
+    let mut first = save_chat(&app, "Planning a holiday");
+    first.updated_at = 1_700_000_000;
+    app.store.save(&first).unwrap();
+    let mut second = save_chat(&app, "Cooking at home");
+    second.updated_at = 1_800_000_000;
+    app.store.save(&second).unwrap();
+
+    let shapes = render(&mut app, &ctx, vec![]);
+    click(&mut app, &ctx, text_position(&shapes, "New conversation"));
+    let shapes = render(&mut app, &ctx, vec![]);
+    assert!(shapes
+        .iter()
+        .any(|(text, _)| text == &date_time::compact(second.updated_at, UiLanguage::English)));
+    click(&mut app, &ctx, text_position(&shapes, "Newest first"));
+    let shapes = render(&mut app, &ctx, vec![]);
+    click(&mut app, &ctx, text_position(&shapes, "Oldest first"));
+    render(&mut app, &ctx, vec![]);
+
+    assert!(app.quick_chat_open);
+    assert_eq!(app.conversation_view.order, SortOrder::Oldest);
+    let restored = ConversationView::for_test(directory.0.join("conversation-view.json"));
+    assert_eq!(restored.order, SortOrder::Oldest);
+}
+
+#[cfg(windows)]
+#[test]
+fn long_titles_leave_room_for_dates_in_the_small_picker() {
+    for theme in [Theme::Light, Theme::Dark] {
+        let directory = TestDirectory::new();
+        let settings = Settings {
+            theme,
+            ..Settings::default()
+        };
+        let (mut app, ctx) = test_app(&directory, settings);
+        let title = "A long conversation about favorite Italian recipes and travel plans";
+        let mut chat = save_chat(&app, title);
+        chat.updated_at = 1_800_000_000;
+        app.store.save(&chat).unwrap();
+        let shapes = render(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, text_position(&shapes, "New conversation"));
+        let shapes = render(&mut app, &ctx, vec![]);
+        let title_rect = text_bounds(&shapes, title);
+        let date_rect = text_bounds(
+            &shapes,
+            &date_time::compact(chat.updated_at, UiLanguage::English),
+        );
+        assert!(
+            title_rect.max.x <= date_rect.min.x,
+            "title={title_rect:?}, date={date_rect:?}"
+        );
+        assert!(
+            date_rect.max.x < 300.0 && date_rect.max.y < 330.0,
+            "date={date_rect:?}"
+        );
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn detached_library_displays_full_dates_and_the_shared_sort_choice() {
+    use super::super::library_view::SortOrder;
+    let directory = TestDirectory::new();
+    let (mut app, ctx) = test_app(&directory, Settings::default());
+    let chat = save_chat(&app, "Discussing travel plans");
+    app.refresh_library();
+    app.conversation_view.order = SortOrder::Oldest;
+    app.log_open = true;
+    app.library_open = true;
+    app.window_positions = WindowPositions::default();
+    let raw = egui::RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(800.0, 700.0))),
+        ..Default::default()
+    };
+    let mut output = egui::FullOutput::default();
+    for _ in 0..3 {
+        output.textures_delta.clear();
+        output = ctx.run_ui(raw.clone(), |ui| app.log_panel(ui.ctx()));
+    }
+    app.positions_dirty = false;
+    let mut shapes = Vec::new();
+    for shape in &output.shapes {
+        collect_text(&shape.shape, &mut shapes);
+    }
+    output.textures_delta.clear();
+    let expected = format!(
+        "Spanish · Last updated: {}",
+        date_time::full(chat.updated_at, UiLanguage::English)
+    );
+    assert!(shapes.iter().any(|(text, _)| text == &expected));
+    assert!(shapes.iter().any(|(text, _)| text == "Oldest first"));
 }

@@ -9,6 +9,8 @@ use std::{
 const MAX_CONTEXT_CHARS: usize = 48_000;
 const MAX_CONTEXT_MESSAGES: usize = 120;
 
+mod title;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MemoryMessage {
     pub speaker: Speaker,
@@ -56,27 +58,7 @@ impl ChatRecord {
         if self.title_is_custom {
             return;
         }
-        if let Some(message) = self
-            .sessions
-            .iter()
-            .flat_map(|s| &s.messages)
-            .find(|m| m.speaker == Speaker::User && !m.text.trim().is_empty())
-        {
-            let text = message
-                .text
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ");
-            let mut chars = text.chars();
-            let title: String = chars.by_ref().take(60).collect();
-            self.title = if chars.next().is_some() {
-                format!("{title}…")
-            } else {
-                title
-            };
-        } else {
-            self.title = "New conversation".into();
-        }
+        self.title = title::automatic_title(&self.sessions);
     }
 
     pub fn rename(&mut self, title: &str) -> Result<(), String> {
@@ -89,7 +71,6 @@ impl ChatRecord {
         }
         self.title = title.to_owned();
         self.title_is_custom = true;
-        self.updated_at = timestamp();
         Ok(())
     }
 
@@ -178,11 +159,12 @@ impl ChatStore {
     pub fn load(&self, id: &str) -> Result<ChatRecord, String> {
         let data =
             fs::read(self.path(id)?).map_err(|e| format!("Could not open conversation: {e}"))?;
-        let record: ChatRecord = serde_json::from_slice(&data)
+        let mut record: ChatRecord = serde_json::from_slice(&data)
             .map_err(|e| format!("Could not read conversation: {e}"))?;
         if record.id != id || record.schema_version != 1 {
             return Err("Unsupported conversation file.".into());
         }
+        record.refresh_title();
         Ok(record)
     }
     pub fn delete(&self, id: &str) -> Result<(), String> {
@@ -240,7 +222,7 @@ mod tests {
             duration_seconds: 8,
             messages: vec![MemoryMessage {
                 speaker: Speaker::User,
-                text: "Hello there".into(),
+                text: "How can I order lunch?".into(),
             }],
         });
         chat.refresh_title();
@@ -251,7 +233,7 @@ mod tests {
         });
         store.save(&chat).unwrap();
         let loaded = store.load(&chat.id).unwrap();
-        assert_eq!(loaded.title, "Hello there");
+        assert_eq!(loaded.title, "How can I order lunch");
         assert_eq!(loaded.sessions[0].messages.len(), 2);
         assert_eq!(store.list().unwrap().0.len(), 1);
         assert!(store.load("../secret").is_err());
@@ -274,7 +256,9 @@ mod tests {
             }],
         });
         first.refresh_title();
+        let last_activity = first.updated_at;
         first.rename("  My practice chat  ").unwrap();
+        assert_eq!(first.updated_at, last_activity);
         store.save(&first).unwrap();
         let mut restored = store.load(&first.id).unwrap();
         restored.refresh_title();
@@ -296,6 +280,35 @@ mod tests {
         assert!(!chat.title_is_custom);
         chat.refresh_title();
         assert_eq!(chat.title, "First words");
+    }
+    #[test]
+    fn loading_old_automatic_titles_uses_the_transcript_without_rewriting_the_file() {
+        let root = std::env::temp_dir().join(format!(
+            "speeching-title-test-{}",
+            ChatRecord::new("Spanish".into()).id
+        ));
+        let store = ChatStore { root: root.clone() };
+        let mut chat = ChatRecord::new("Spanish".into());
+        chat.title = "Hola".into();
+        chat.sessions.push(SavedSession {
+            voice: "Aoede".into(),
+            duration_seconds: 12,
+            messages: vec![
+                MemoryMessage {
+                    speaker: Speaker::User,
+                    text: "Hola".into(),
+                },
+                MemoryMessage {
+                    speaker: Speaker::User,
+                    text: "Hablemos de recetas italianas".into(),
+                },
+            ],
+        });
+        store.save(&chat).unwrap();
+        let before = fs::read(store.path(&chat.id).unwrap()).unwrap();
+        assert_eq!(store.load(&chat.id).unwrap().title, "Recetas italianas");
+        assert_eq!(fs::read(store.path(&chat.id).unwrap()).unwrap(), before);
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn context_is_unicode_safe_bounded_and_chronological() {

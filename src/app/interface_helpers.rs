@@ -18,32 +18,14 @@ pub(super) fn is_modifier_key(key: egui::Key) -> bool {
 
 pub(super) fn chat_title(chat: &ChatRecord, language: UiLanguage) -> &str {
     if !chat.title_is_custom
-        && chat.title == "New conversation"
-        && !chat.sessions.iter().any(|s| {
-            s.messages
-                .iter()
-                .any(|m| m.speaker == Speaker::User && !m.text.trim().is_empty())
-        })
+        && matches!(
+            chat.title.as_str(),
+            "New conversation" | "Practice conversation"
+        )
     {
-        language.text("New conversation")
-    } else {
-        &chat.title
+        return language.text(&chat.title);
     }
-}
-
-pub(super) fn age_label(timestamp: u64, language: UiLanguage) -> String {
-    let seconds = history::timestamp().saturating_sub(timestamp);
-    if seconds < 60 {
-        language.text("Just now").into()
-    } else if seconds < 3600 {
-        language.format("{0} min ago", &(seconds / 60).to_string())
-    } else if seconds < 86_400 {
-        language.format("{0} h ago", &(seconds / 3600).to_string())
-    } else if seconds < 172_800 {
-        language.text("1 day ago").into()
-    } else {
-        language.format("{0} d ago", &(seconds / 86_400).to_string())
-    }
+    &chat.title
 }
 
 pub(super) fn pace_label(speed: f32) -> &'static str {

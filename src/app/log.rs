@@ -1,4 +1,4 @@
-use super::interface_helpers::{age_label, chat_title};
+use super::interface_helpers::chat_title;
 use super::*;
 use eframe::egui::{RichText, ViewportBuilder, ViewportId};
 
@@ -241,6 +241,7 @@ impl App {
                 .hint_text(lang.text("Search saved conversations"))
                 .desired_width(f32::INFINITY),
         );
+        self.conversation_sort_control(ui, "log-chat-sort");
         ui.add_space(8.0);
         if !self.library_warning.is_empty() {
             ui.label(
@@ -249,9 +250,12 @@ impl App {
                     .color(colors.error),
             );
         }
-        let matching = self
-            .library_search
-            .matching(&self.library, &self.library_query, lang);
+        let matching = self.library_search.matching(
+            &self.library,
+            &self.library_query,
+            lang,
+            self.conversation_view.order,
+        );
         let library = &self.library;
         let selected_chat = self.selected_chat.as_ref();
         egui::ScrollArea::vertical()
@@ -276,7 +280,10 @@ impl App {
                         RichText::new(format!(
                             "{} · {}",
                             lang.text(&chat.language),
-                            age_label(chat.updated_at, lang)
+                            lang.format(
+                                "Last updated: {0}",
+                                &date_time::full(chat.updated_at, lang)
+                            )
                         ))
                         .size(11.0)
                         .color(colors.muted),

@@ -1,4 +1,4 @@
-use super::interface_helpers::{age_label, chat_title};
+use super::interface_helpers::chat_title;
 use super::*;
 use eframe::egui::{Rect, RichText, Stroke, StrokeKind, Vec2};
 
@@ -75,17 +75,22 @@ impl App {
     fn quick_chat_popup(&mut self, ui: &egui::Ui, response: &egui::Response) {
         let mut open = self.quick_chat_open;
         let mut choice = None;
+        let previous_order = self.conversation_view.order;
         egui::Popup::from_response(response)
             .open_bool(&mut open)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .gap(5.0)
-            .width(260.0)
+            .width(280.0)
             .frame(
                 egui::Frame::popup(ui.style())
                     .corner_radius(12.0)
                     .inner_margin(egui::Margin::same(10)),
             )
             .show(|ui| self.quick_chat_menu(ui, &mut choice));
+        // The sort list can extend outside this compact popup; selecting an order keeps it open.
+        if self.conversation_view.order != previous_order {
+            open = true;
+        }
         if let Some(choice) = choice {
             if self.apply_quick_choice(choice) {
                 open = false;
@@ -97,7 +102,8 @@ impl App {
     fn quick_chat_menu(&mut self, ui: &mut egui::Ui, choice: &mut Option<Choice>) {
         let lang = self.settings.ui_language;
         let colors = palette(self.settings.theme);
-        ui.set_min_width(240.0);
+        ui.set_min_width(260.0);
+        ui.spacing_mut().item_spacing.y = 6.0;
         if ui
             .add_sized(
                 [ui.available_width(), 30.0],
@@ -131,14 +137,18 @@ impl App {
                 .hint_text(lang.text("Search saved conversations"))
                 .desired_width(f32::INFINITY),
         );
+        self.conversation_sort_control(ui, "quick-chat-sort");
         self.quick_chat_results(ui, choice);
     }
 
     fn quick_chat_results(&mut self, ui: &mut egui::Ui, choice: &mut Option<Choice>) {
         let lang = self.settings.ui_language;
-        let matches = self
-            .quick_chat_search
-            .matching(&self.library, &self.quick_chat_query, lang);
+        let matches = self.quick_chat_search.matching(
+            &self.library,
+            &self.quick_chat_query,
+            lang,
+            self.conversation_view.order,
+        );
         if matches.is_empty() {
             ui.label(
                 RichText::new(lang.text("No conversations found."))
@@ -149,24 +159,34 @@ impl App {
         let selected = self.selected_chat.as_ref().map(|chat| &chat.id);
         egui::ScrollArea::vertical()
             .id_salt("quick-chat-results")
-            .max_height(114.0)
+            .max_height(100.0)
             .auto_shrink([false, true])
             .show_rows(ui, 30.0, matches.len(), |ui, rows| {
                 for row in rows {
                     let chat = &self.library[matches[row]];
                     let title = chat_title(chat, lang);
                     let details = format!(
-                        "{} · {} · {}",
+                        "{}\n{} · {}",
                         title,
                         lang.text(&chat.language),
-                        age_label(chat.updated_at, lang)
+                        lang.format("Last updated: {0}", &date_time::full(chat.updated_at, lang))
                     );
+                    let is_selected = selected == Some(&chat.id);
+                    let date_color = if is_selected {
+                        palette(self.settings.theme).ink
+                    } else {
+                        palette(self.settings.theme).muted
+                    };
                     if ui
                         .add_sized(
                             [ui.available_width(), 30.0],
-                            egui::Button::selectable(selected == Some(&chat.id), title)
+                            egui::Button::selectable(is_selected, title)
                                 .truncate()
-                                .right_text(""),
+                                .right_text(
+                                    RichText::new(date_time::compact(chat.updated_at, lang))
+                                        .size(11.0)
+                                        .color(date_color),
+                                ),
                         )
                         .on_hover_text(details)
                         .clicked()
