@@ -1,0 +1,5 @@
+/target/
+/conversations/
+node_modules/
+.env
+.env.*

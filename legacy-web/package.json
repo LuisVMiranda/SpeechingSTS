@@ -1,0 +1,12 @@
+{
+  "name": "speeching-sts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A small local speech-to-speech language practice app using Gemini Live.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f4ef">
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+  <title>Speeching</title>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand"><img src="/icon.svg" alt=""><span>speeching<span class="brand-dot">.</span></span></div>
+      <button class="icon-button" id="settings-button" type="button" aria-label="Open settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg>
+      </button>
+    </header>
+
+    <section class="session" aria-labelledby="session-title">
+      <div class="session-topline"><span class="live-dot" id="status-dot"></span><span id="connection-label">Ready when you are</span><span class="session-language" id="language-label">English · intermediate</span></div>
+      <div class="session-heading"><div><h1 id="session-title">A little practice,<br><em>every day.</em></h1><p>Make space for a real conversation.</p></div><div class="orbital" aria-hidden="true"><span></span><span></span><span></span><i></i></div></div>
+      <div class="wave-wrap"><canvas id="wave" aria-hidden="true"></canvas><div class="wave-caption"><span id="wave-label">Your conversation starts here</span><span id="timer">00:00</span></div></div>
+    </section>
+
+    <section class="voice-section" aria-labelledby="voice-heading">
+      <div class="section-head"><div><h2 id="voice-heading">Choose a voice</h2><p>One companion, three voices</p></div><span class="section-hint">SELECT ONE</span></div>
+      <div class="voice-list" role="group" aria-label="Choose a voice">
+        <button class="voice-option selected" type="button" data-voice="Aoede" aria-pressed="true">
+          <span class="avatar avatar-aoede" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M7 30c7-13 13-19 21-18 7 1 11 7 13 14-9-2-14-1-17 5-4 5-11 6-17-1Z"/><circle cx="29" cy="21" r="4"/></svg></span><span><strong>Aoede</strong><small>Breezy</small></span><span class="selected-mark" aria-hidden="true"></span>
+        </button>
+        <button class="voice-option" type="button" data-voice="Puck" aria-pressed="false">
+          <span class="avatar avatar-puck" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M10 30c1-11 8-18 16-18 7 0 12 6 12 14-8-2-12 0-15 5-4 5-9 5-13-1Z"/><circle cx="28" cy="20" r="4"/></svg></span><span><strong>Puck</strong><small>Upbeat</small></span><span class="selected-mark" aria-hidden="true"></span>
+        </button>
+        <button class="voice-option" type="button" data-voice="Kore" aria-pressed="false">
+          <span class="avatar avatar-kore" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 29c4-11 11-17 18-16 8 1 12 6 14 13-8 0-13 1-16 6-5 4-11 4-16-3Z"/><circle cx="28" cy="20" r="4"/></svg></span><span><strong>Kore</strong><small>Firm</small></span><span class="selected-mark" aria-hidden="true"></span>
+        </button>
+      </div>
+    </section>
+
+    <section class="conversation" aria-labelledby="chat-heading">
+      <div class="section-head conversation-heading"><div><h2 id="chat-heading">Conversation</h2><p>Words will appear as you speak</p></div><button class="text-button" id="clear-button" type="button">Clear</button></div>
+      <div class="chat" id="chat" role="log" aria-label="Conversation transcript" aria-live="polite">
+        <div class="empty-chat" id="empty-chat"><div class="empty-symbol" aria-hidden="true"><span></span><span></span><span></span></div><p>A good conversation<br>begins with hello.</p><small>Your transcript will appear here.</small></div>
+      </div>
+    </section>
+
+    <footer class="controls">
+      <div class="notice" id="notice" role="status">Add your API key in settings to get started.</div>
+      <div class="control-row"><button id="mute-button" class="mute-button" type="button" aria-label="Mute microphone" title="Mute microphone" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-3 0h6"/></svg></button><button id="start-button" class="start-button" type="button"><span class="button-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span><span id="start-text">Start conversation</span></button></div>
+      <p class="footnote"><span></span> Built for little moments of progress</p>
+    </footer>
+  </main>
+
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <form id="settings-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="settings-title">Make it yours</h2><p>Set up your practice session.</p></div><button class="icon-button" type="button" id="close-settings" aria-label="Close settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <label for="api-key">Gemini API key</label><input id="api-key" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false"><p class="field-note">Kept in memory for this window only. <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Get a key ↗</a></p>
+      <label for="language">Practice language</label><input id="language" type="text" maxlength="60" placeholder="e.g. English, Spanish, Japanese" list="language-options"><datalist id="language-options"><option value="English"><option value="Spanish"><option value="French"><option value="German"><option value="Italian"><option value="Portuguese"><option value="Japanese"><option value="Korean"><option value="Mandarin Chinese"></datalist>
+      <label for="level">Your level</label><select id="level"><option>Beginner</option><option selected>Intermediate</option><option>Advanced</option></select>
+      <p class="settings-note">Your language and level are saved on this device. Changes take effect the next time you start a conversation.</p>
+      <button class="save-button" type="submit">Save settings</button>
+    </form>
+  </dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

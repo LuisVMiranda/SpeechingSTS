@@ -1,0 +1,4 @@
+libsonic is a Rust port of Sonic (https://github.com/waywardgeek/sonic),
+Copyright 2010 Bill Cox, licensed under the Apache License 2.0.
+
+The port follows ZirekHQ/dengjen-sonic, the maintained fork of Sonic.
