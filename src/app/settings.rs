@@ -1,194 +1,10 @@
-use super::interface::{is_modifier_key, pace_label, voice_description, voice_symbol};
+use super::interface_helpers::{is_modifier_key, pace_label};
+use super::voices::voice_label;
 use super::*;
-use eframe::egui::{RichText, Vec2, ViewportBuilder, ViewportId};
+use eframe::egui::RichText;
 
 impl App {
-    pub(super) fn settings_panel(&mut self, ctx: &egui::Context) {
-        if !self.settings_open {
-            return;
-        }
-        let mut close = false;
-        let mut save = false;
-        let mut position = None;
-        let colors = palette(self.settings.theme);
-        let lang = self.settings.ui_language;
-        let mut builder = ViewportBuilder::default()
-            .with_title(lang.text("Speeching settings"))
-            .with_inner_size([470.0, 590.0])
-            .with_min_inner_size([360.0, 380.0]);
-        if let Some(pos) = self.window_positions.settings {
-            builder = builder.with_position(pos);
-        }
-        ctx.show_viewport_immediate(ViewportId::from_hash_of("settings"), builder, |child, _| {
-            if child.input(|i| i.viewport().close_requested()) {
-                close = true;
-            }
-            self.capture_shortcut(child);
-            position = child.input(|i| i.viewport().outer_rect.map(|r| [r.left(), r.top()]));
-            egui::Panel::top("settings-header")
-                .frame(
-                    egui::Frame::new()
-                        .fill(colors.paper)
-                        .inner_margin(egui::Margin {
-                            left: 20,
-                            right: 20,
-                            top: 18,
-                            bottom: 10,
-                        }),
-                )
-                .show(child, |ui| {
-                    ui.label(
-                        RichText::new(lang.text("Settings"))
-                            .size(22.0)
-                            .strong()
-                            .color(colors.ink),
-                    );
-                    ui.add_space(8.0);
-                    let previous_section = self.settings_section;
-                    ui.horizontal_wrapped(|ui| {
-                        for (section, name) in [
-                            (SettingsSection::Practice, "Practice"),
-                            (SettingsSection::Microphone, "Microphone"),
-                            (SettingsSection::Provider, "Provider"),
-                            (SettingsSection::Appearance, "Appearance"),
-                        ] {
-                            ui.selectable_value(
-                                &mut self.settings_section,
-                                section,
-                                lang.text(name),
-                            );
-                        }
-                    });
-                    if self.settings_section != previous_section {
-                        if previous_section == SettingsSection::Provider
-                            && !self.persist_pending_keys()
-                        {
-                            self.settings_section = SettingsSection::Provider;
-                        }
-                        if self.settings_section != SettingsSection::Microphone {
-                            self.shortcut_capture = false;
-                        }
-                        if self.key_feedback == "Saved API key removed." {
-                            self.key_feedback.clear();
-                        }
-                    }
-                    if crate::languages::canonical(self.settings.provider, &self.settings.language)
-                        .is_none()
-                    {
-                        if ui
-                            .link(
-                                RichText::new(lang.text("Choose a supported language"))
-                                    .color(colors.error),
-                            )
-                            .clicked()
-                        {
-                            self.settings_section = SettingsSection::Practice;
-                        }
-                    }
-                });
-            egui::Panel::bottom("settings-actions")
-                .frame(
-                    egui::Frame::new()
-                        .fill(colors.paper)
-                        .inner_margin(egui::Margin {
-                            left: 20,
-                            right: 20,
-                            top: 10,
-                            bottom: 16,
-                        }),
-                )
-                .show(child, |ui| {
-                    if !self.key_feedback.is_empty() {
-                        let color = if self.key_feedback == "Saved API key removed." {
-                            colors.muted
-                        } else {
-                            colors.error
-                        };
-                        ui.label(
-                            RichText::new(lang.message(&self.key_feedback))
-                                .size(12.0)
-                                .color(color),
-                        );
-                    }
-                    let valid = crate::languages::canonical(
-                        self.settings.provider,
-                        &self.settings.language,
-                    )
-                    .is_some();
-                    if ui
-                        .add_enabled(
-                            valid,
-                            egui::Button::new(
-                                RichText::new(lang.text("Save settings"))
-                                    .color(Color32::WHITE)
-                                    .strong(),
-                            )
-                            .fill(BLUE)
-                            .corner_radius(7.0)
-                            .min_size(Vec2::new(130.0, 36.0)),
-                        )
-                        .clicked()
-                    {
-                        save = true;
-                    }
-                });
-            egui::CentralPanel::default()
-                .frame(
-                    egui::Frame::new()
-                        .fill(colors.paper)
-                        .inner_margin(egui::Margin {
-                            left: 20,
-                            right: 20,
-                            top: 12,
-                            bottom: 8,
-                        }),
-                )
-                .show(child, |ui| {
-                    ui.add_space(4.0);
-                    egui::ScrollArea::vertical()
-                        .id_salt(("settings-content", self.settings_section as u8))
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| match self.settings_section {
-                            SettingsSection::Practice => self.practice_settings(ui),
-                            SettingsSection::Microphone => self.microphone_settings(ui),
-                            SettingsSection::Provider => self.provider_settings(ui),
-                            SettingsSection::Appearance => self.appearance_settings(ui),
-                        });
-                });
-        });
-        if let Some(pos) = position {
-            if self.window_positions.settings != Some(pos) {
-                self.window_positions.settings = Some(pos);
-                self.positions_dirty = true;
-            }
-        }
-        if save {
-            if let Some(language) =
-                crate::languages::canonical(self.settings.provider, &self.settings.language)
-            {
-                self.settings.language = language.to_owned();
-            }
-            match self.save_pending_keys().and_then(|_| self.settings.save()) {
-                Ok(()) => {
-                    close = true;
-                    if self.session.is_none() {
-                        self.status = "Ready when you are".into();
-                        self.error = false;
-                    }
-                }
-                Err(error) => {
-                    self.key_feedback = error.clone();
-                    self.status = format!("Could not save settings: {error}");
-                    self.error = true;
-                }
-            }
-        }
-        if close {
-            self.close_settings();
-        }
-    }
-
-    fn capture_shortcut(&mut self, ctx: &egui::Context) {
+    pub(super) fn capture_shortcut(&mut self, ctx: &egui::Context) {
         if !self.shortcut_capture {
             return;
         }
@@ -218,7 +34,7 @@ impl App {
         }
     }
 
-    fn practice_settings(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn practice_settings(&mut self, ui: &mut egui::Ui) {
         let lang = self.settings.ui_language;
         let colors = palette(self.settings.theme);
         self.language_selector(ui);
@@ -232,23 +48,15 @@ impl App {
             Provider::OpenAi => &mut self.settings.openai_voice,
         };
         egui::ComboBox::from_id_salt("voice")
-            .selected_text(format!(
-                "{}  {}",
-                voice_symbol(self.settings.provider, voice),
-                voice
-            ))
+            .selected_text(voice_label(self.settings.provider, voice, lang))
             .width(230.0)
             .show_ui(ui, |ui| match self.settings.provider {
                 Provider::Gemini => {
-                    for (name, description) in GEMINI_VOICES {
+                    for (name, _) in GEMINI_VOICES {
                         ui.selectable_value(
                             voice,
                             (*name).to_owned(),
-                            format!(
-                                "{}  {name} · {}",
-                                voice_symbol(Provider::Gemini, name),
-                                voice_description(lang, description)
-                            ),
+                            voice_label(Provider::Gemini, name, lang),
                         );
                     }
                 }
@@ -257,7 +65,7 @@ impl App {
                         ui.selectable_value(
                             voice,
                             (*name).to_owned(),
-                            format!("{}  {name}", voice_symbol(Provider::OpenAi, name)),
+                            voice_label(Provider::OpenAi, name, lang),
                         );
                     }
                 }
@@ -296,7 +104,7 @@ impl App {
         );
     }
 
-    fn microphone_settings(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn microphone_settings(&mut self, ui: &mut egui::Ui) {
         let lang = self.settings.ui_language;
         let colors = palette(self.settings.theme);
         ui.label(RichText::new(lang.text("Microphone")).size(16.0).strong());
@@ -365,11 +173,16 @@ impl App {
         );
     }
 
-    fn provider_settings(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn provider_settings(&mut self, ui: &mut egui::Ui) {
+        self.provider_selection(ui);
+        self.provider_key(ui);
+        self.provider_endpoint(ui);
+    }
+
+    fn provider_selection(&mut self, ui: &mut egui::Ui) {
         let lang = self.settings.ui_language;
-        let colors = palette(self.settings.theme);
         ui.label(RichText::new(lang.text("Provider")).size(16.0).strong());
-        let previous_provider = self.settings.provider;
+        let previous = self.settings.provider;
         ui.horizontal_wrapped(|ui| {
             ui.selectable_value(&mut self.settings.provider, Provider::Gemini, "Gemini Live");
             ui.selectable_value(
@@ -378,74 +191,91 @@ impl App {
                 "OpenAI Realtime",
             );
         });
-        if self.settings.provider != previous_provider && !self.persist_pending_keys() {
-            self.settings.provider = previous_provider;
+        if self.settings.provider != previous && !self.persist_pending_keys() {
+            self.settings.provider = previous;
         }
         ui.add_space(12.0);
+    }
+
+    fn provider_key(&mut self, ui: &mut egui::Ui) {
         let provider = self.settings.provider;
         let saved = match provider {
             Provider::Gemini => self.gemini_key_saved,
             Provider::OpenAi => self.openai_key_saved,
         };
-        ui.label(RichText::new(lang.text("API key")).strong());
+        ui.label(RichText::new(self.settings.ui_language.text("API key")).strong());
         if saved && self.editing_key != Some(provider) {
-            ui.label(
-                RichText::new(lang.text("Saved securely in Windows Credential Manager."))
-                    .size(12.0)
-                    .color(colors.muted),
-            );
-            ui.horizontal_wrapped(|ui| {
-                if ui.small_button(lang.text("Replace key")).clicked() {
-                    self.editing_key = Some(provider);
-                }
-                if ui.small_button(lang.text("Remove saved key")).clicked() {
-                    self.forget_key(provider);
-                }
-            });
+            self.saved_key_actions(ui, provider);
         } else {
-            let draft = match provider {
-                Provider::Gemini => &mut self.gemini_key,
-                Provider::OpenAi => &mut self.openai_key,
-            };
-            let response = ui.add(
-                egui::TextEdit::singleline(draft)
-                    .password(true)
-                    .hint_text(lang.text("Paste an API key"))
-                    .desired_width(f32::INFINITY),
-            );
-            let has_draft = !draft.trim().is_empty();
-            let pasted = response.changed()
-                && ui.input(|input| {
-                    input
-                        .events
-                        .iter()
-                        .any(|event| matches!(event, egui::Event::Paste(_)))
-                });
-            ui.label(
-                RichText::new(lang.text("Saved automatically when you paste or leave this field."))
-                    .size(12.0)
-                    .color(colors.muted),
-            );
-            let mut save_key = false;
-            let mut cancel = false;
-            ui.horizontal_wrapped(|ui| {
-                save_key = ui
-                    .add_enabled(has_draft, egui::Button::new(lang.text("Save key")))
-                    .clicked();
-                if saved {
-                    cancel = ui.small_button(lang.text("Cancel")).clicked();
-                }
-            });
-            if cancel {
-                draft.clear();
-                self.editing_key = None;
-                self.key_feedback.clear();
-            } else if has_draft && (pasted || response.lost_focus() || save_key) {
-                self.persist_pending_keys();
-            }
+            self.key_input(ui, provider, saved);
         }
         ui.add_space(12.0);
-        let (url, model) = match provider {
+    }
+
+    fn saved_key_actions(&mut self, ui: &mut egui::Ui, provider: Provider) {
+        let lang = self.settings.ui_language;
+        ui.label(
+            RichText::new(lang.text("Saved securely in Windows Credential Manager."))
+                .size(12.0)
+                .color(palette(self.settings.theme).muted),
+        );
+        ui.horizontal_wrapped(|ui| {
+            if ui.small_button(lang.text("Replace key")).clicked() {
+                self.editing_key = Some(provider);
+            }
+            if ui.small_button(lang.text("Remove saved key")).clicked() {
+                self.forget_key(provider);
+            }
+        });
+    }
+
+    fn key_input(&mut self, ui: &mut egui::Ui, provider: Provider, saved: bool) {
+        let lang = self.settings.ui_language;
+        let draft = match provider {
+            Provider::Gemini => &mut self.gemini_key,
+            Provider::OpenAi => &mut self.openai_key,
+        };
+        let response = ui.add(
+            egui::TextEdit::singleline(draft)
+                .password(true)
+                .hint_text(lang.text("Paste an API key"))
+                .desired_width(f32::INFINITY),
+        );
+        let has_draft = !draft.trim().is_empty();
+        let pasted = response.changed()
+            && ui.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .any(|event| matches!(event, egui::Event::Paste(_)))
+            });
+        ui.label(
+            RichText::new(lang.text("Saved automatically when you paste or leave this field."))
+                .size(12.0)
+                .color(palette(self.settings.theme).muted),
+        );
+        let mut save_key = false;
+        let mut cancel = false;
+        ui.horizontal_wrapped(|ui| {
+            save_key = ui
+                .add_enabled(has_draft, egui::Button::new(lang.text("Save key")))
+                .clicked();
+            if saved {
+                cancel = ui.small_button(lang.text("Cancel")).clicked();
+            }
+        });
+        if cancel {
+            draft.clear();
+            self.editing_key = None;
+            self.key_feedback.clear();
+        } else if has_draft && (pasted || response.lost_focus() || save_key) {
+            self.persist_pending_keys();
+        }
+    }
+
+    fn provider_endpoint(&mut self, ui: &mut egui::Ui) {
+        let lang = self.settings.ui_language;
+        let (url, model) = match self.settings.provider {
             Provider::Gemini => (
                 &mut self.settings.gemini_url,
                 &mut self.settings.gemini_model,
@@ -460,10 +290,10 @@ impl App {
         ui.add_space(8.0);
         ui.label(RichText::new(lang.text("WebSocket URL")).strong());
         ui.add(egui::TextEdit::singleline(url).desired_width(f32::INFINITY));
-        ui.label(RichText::new(lang.text("The selected URL receives this key. Custom endpoints must use the provider's live protocol.")).size(12.0).color(colors.muted));
+        ui.label(RichText::new(lang.text("The selected URL receives this key. Custom endpoints must use the provider's live protocol.")).size(12.0).color(palette(self.settings.theme).muted));
     }
 
-    fn appearance_settings(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn appearance_settings(&mut self, ui: &mut egui::Ui) {
         let lang = self.settings.ui_language;
         ui.label(RichText::new(lang.text("Interface language")).strong());
         egui::ComboBox::from_id_salt("interface-language")
@@ -494,6 +324,10 @@ impl App {
         ui.checkbox(
             &mut self.settings.minimal,
             lang.text("Hide conversation text"),
+        );
+        ui.checkbox(
+            &mut self.settings.open_log_after_conversation,
+            lang.text("Open conversation log when a conversation ends"),
         );
         ui.horizontal_wrapped(|ui| {
             ui.add(
@@ -554,6 +388,7 @@ fn practice_pickers(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use eframe::egui::Vec2;
     #[test]
     fn localized_practice_pickers_fit_the_narrow_settings_body() {
         for language in UiLanguage::ALL {

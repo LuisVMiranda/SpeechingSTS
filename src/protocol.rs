@@ -145,128 +145,145 @@ pub fn audio_chunk(provider: Provider, bytes: &[u8]) -> Value {
 pub fn parse(provider: Provider, payload: &Value) -> Vec<Incoming> {
     let mut result = Vec::new();
     match provider {
-        Provider::Gemini => {
-            if payload.get("setupComplete").is_some() {
-                result.push(Incoming::Ready);
-            }
-            if let Some(handle) = payload
-                .pointer("/sessionResumptionUpdate/newHandle")
-                .and_then(Value::as_str)
-            {
-                if payload
-                    .pointer("/sessionResumptionUpdate/resumable")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false)
-                {
-                    result.push(Incoming::Resume(handle.into()));
-                }
-            }
-            if let Some(content) = payload.get("serverContent") {
-                if content.get("interrupted").and_then(Value::as_bool) == Some(true) {
-                    result.push(Incoming::Interrupt);
-                }
-                for (name, speaker) in [
-                    ("inputTranscription", Speaker::User),
-                    ("outputTranscription", Speaker::Partner),
-                ] {
-                    if let Some(text) = content
-                        .pointer(&format!("/{name}/text"))
-                        .and_then(Value::as_str)
-                    {
-                        result.push(Incoming::Transcript {
-                            speaker,
-                            text: text.into(),
-                            id: None,
-                            replace: false,
-                        });
-                    }
-                }
-                if let Some(parts) = content
-                    .pointer("/modelTurn/parts")
-                    .and_then(Value::as_array)
-                {
-                    for part in parts {
-                        if let Some(data) = part
-                            .pointer("/inlineData/data")
-                            .and_then(Value::as_str)
-                            .and_then(|s| STANDARD.decode(s).ok())
-                        {
-                            result.push(Incoming::Audio(data));
-                        }
-                    }
-                }
-                if content.get("generationComplete").and_then(Value::as_bool) == Some(true) {
-                    result.push(Incoming::AudioEnd);
-                }
-                if content.get("turnComplete").and_then(Value::as_bool) == Some(true) {
-                    result.push(Incoming::TurnEnd);
-                }
-            }
-        }
-        Provider::OpenAi => {
-            let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
-            let id = payload
-                .get("item_id")
-                .and_then(Value::as_str)
-                .map(str::to_owned);
-            match kind {
-                "session.updated" => result.push(Incoming::Ready),
-                "input_audio_buffer.speech_started" => result.push(Incoming::Interrupt),
-                "conversation.item.input_audio_transcription.delta" => {
-                    add_text(&mut result, payload, "delta", Speaker::User, id, false)
-                }
-                "conversation.item.input_audio_transcription.completed" => {
-                    add_text(&mut result, payload, "transcript", Speaker::User, id, true)
-                }
-                "response.output_audio_transcript.delta" | "response.audio_transcript.delta" => {
-                    add_text(&mut result, payload, "delta", Speaker::Partner, id, false)
-                }
-                "response.output_audio_transcript.done" | "response.audio_transcript.done" => {
-                    add_text(
-                        &mut result,
-                        payload,
-                        "transcript",
-                        Speaker::Partner,
-                        id,
-                        true,
-                    )
-                }
-                "response.output_audio.delta" | "response.audio.delta" => {
-                    if let Some(data) = payload
-                        .get("delta")
-                        .and_then(Value::as_str)
-                        .and_then(|s| STANDARD.decode(s).ok())
-                    {
-                        result.push(Incoming::Audio(data));
-                    }
-                }
-                "response.output_audio.done" | "response.audio.done" => {
-                    result.push(Incoming::AudioEnd)
-                }
-                "response.done" => result.push(Incoming::TurnEnd),
-                "error" => result.push(Incoming::Error(
-                    payload
-                        .pointer("/error/message")
-                        .and_then(Value::as_str)
-                        .unwrap_or("The provider reported an error.")
-                        .chars()
-                        .take(180)
-                        .collect(),
-                )),
-                _ => {}
-            }
-        }
+        Provider::Gemini => parse_gemini(payload, &mut result),
+        Provider::OpenAi => parse_openai(payload, &mut result),
     }
     result
 }
+
+fn parse_gemini(payload: &Value, result: &mut Vec<Incoming>) {
+    if payload.get("setupComplete").is_some() {
+        result.push(Incoming::Ready);
+    }
+    if let Some(handle) = payload
+        .pointer("/sessionResumptionUpdate/newHandle")
+        .and_then(Value::as_str)
+    {
+        if payload
+            .pointer("/sessionResumptionUpdate/resumable")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            result.push(Incoming::Resume(handle.into()));
+        }
+    }
+    if let Some(content) = payload.get("serverContent") {
+        parse_gemini_content(content, result);
+    }
+}
+
+fn parse_gemini_content(content: &Value, result: &mut Vec<Incoming>) {
+    if content.get("interrupted").and_then(Value::as_bool) == Some(true) {
+        result.push(Incoming::Interrupt);
+    }
+    for (name, speaker) in [
+        ("inputTranscription", Speaker::User),
+        ("outputTranscription", Speaker::Partner),
+    ] {
+        if let Some(text) = content
+            .pointer(&format!("/{name}/text"))
+            .and_then(Value::as_str)
+        {
+            result.push(Incoming::Transcript {
+                speaker,
+                text: text.into(),
+                id: None,
+                replace: false,
+            });
+        }
+    }
+    parse_gemini_audio(content, result);
+    if content.get("generationComplete").and_then(Value::as_bool) == Some(true) {
+        result.push(Incoming::AudioEnd);
+    }
+    if content.get("turnComplete").and_then(Value::as_bool) == Some(true) {
+        result.push(Incoming::TurnEnd);
+    }
+}
+
+fn parse_gemini_audio(content: &Value, result: &mut Vec<Incoming>) {
+    let Some(parts) = content
+        .pointer("/modelTurn/parts")
+        .and_then(Value::as_array)
+    else {
+        return;
+    };
+    for part in parts {
+        if let Some(data) = part
+            .pointer("/inlineData/data")
+            .and_then(Value::as_str)
+            .and_then(|s| STANDARD.decode(s).ok())
+        {
+            result.push(Incoming::Audio(data));
+        }
+    }
+}
+
+fn parse_openai(payload: &Value, result: &mut Vec<Incoming>) {
+    let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
+    match kind {
+        "session.updated" | "input_audio_buffer.speech_started" => {
+            result.push(openai_signal(kind));
+        }
+        "conversation.item.input_audio_transcription.delta" => {
+            add_text(result, payload, "delta", Speaker::User, false)
+        }
+        "conversation.item.input_audio_transcription.completed" => {
+            add_text(result, payload, "transcript", Speaker::User, true)
+        }
+        "response.output_audio_transcript.delta" | "response.audio_transcript.delta" => {
+            add_text(result, payload, "delta", Speaker::Partner, false)
+        }
+        "response.output_audio_transcript.done" | "response.audio_transcript.done" => {
+            add_text(result, payload, "transcript", Speaker::Partner, true)
+        }
+        "response.output_audio.delta" | "response.audio.delta" => {
+            parse_openai_audio(payload, result);
+        }
+        "response.output_audio.done" | "response.audio.done" => result.push(Incoming::AudioEnd),
+        "response.done" => result.push(Incoming::TurnEnd),
+        "error" => result.push(Incoming::Error(
+            payload
+                .pointer("/error/message")
+                .and_then(Value::as_str)
+                .unwrap_or("The provider reported an error.")
+                .chars()
+                .take(180)
+                .collect(),
+        )),
+        _ => {}
+    }
+}
+
+fn openai_signal(kind: &str) -> Incoming {
+    if kind == "session.updated" {
+        Incoming::Ready
+    } else {
+        Incoming::Interrupt
+    }
+}
+
+fn parse_openai_audio(payload: &Value, result: &mut Vec<Incoming>) {
+    if let Some(data) = payload
+        .get("delta")
+        .and_then(Value::as_str)
+        .and_then(|s| STANDARD.decode(s).ok())
+    {
+        result.push(Incoming::Audio(data));
+    }
+}
+
 fn add_text(
     result: &mut Vec<Incoming>,
     payload: &Value,
     field: &str,
     speaker: Speaker,
-    id: Option<String>,
     replace: bool,
 ) {
+    let id = payload
+        .get("item_id")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
     if let Some(text) = payload.get(field).and_then(Value::as_str) {
         result.push(Incoming::Transcript {
             speaker,

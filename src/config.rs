@@ -114,6 +114,7 @@ pub struct Settings {
     pub speed: f32,
     pub fade_seconds: f32,
     pub minimal: bool,
+    pub open_log_after_conversation: bool,
     pub instructions: String,
     pub input_mode: InputMode,
     pub noise_gate_enabled: bool,
@@ -138,6 +139,7 @@ impl Default for Settings {
             speed: 1.0,
             fade_seconds: 8.0,
             minimal: false,
+            open_log_after_conversation: false,
             instructions: String::new(),
             input_mode: InputMode::VoiceActivated,
             noise_gate_enabled: true,
@@ -268,6 +270,16 @@ mod tests {
                 .fade_seconds,
             8.0
         );
+    }
+    #[test]
+    fn automatic_log_opening_is_opt_in_and_persists() {
+        let old: Settings = serde_json::from_str("{}").unwrap();
+        assert!(!old.open_log_after_conversation);
+        let mut selected = Settings::default();
+        selected.open_log_after_conversation = true;
+        let restored: Settings =
+            serde_json::from_str(&serde_json::to_string(&selected).unwrap()).unwrap();
+        assert!(restored.open_log_after_conversation);
     }
     #[test]
     fn old_default_fade_is_upgraded_without_resetting_other_preferences() {

@@ -10,322 +10,16 @@ use crate::{
     i18n::UiLanguage,
     protocol::{Event, Speaker},
 };
-use eframe::egui::{self, Color32, Vec2};
+use eframe::egui::{self, Color32};
 use std::{
     sync::mpsc::{self, Receiver},
     time::{Duration, Instant},
 };
 
-const INK: Color32 = Color32::from_rgb(25, 40, 58);
-const BLUE: Color32 = Color32::from_rgb(35, 99, 225);
-const PAPER: Color32 = Color32::from_rgb(250, 252, 255);
-const MUTED: Color32 = Color32::from_rgb(86, 105, 125);
-
-#[derive(Clone, Copy)]
-struct Palette {
-    ink: Color32,
-    paper: Color32,
-    muted: Color32,
-    error: Color32,
-}
-fn palette(theme: Theme) -> Palette {
-    if theme == Theme::Dark {
-        Palette {
-            ink: Color32::from_rgb(231, 238, 247),
-            paper: Color32::from_rgb(20, 27, 38),
-            muted: Color32::from_rgb(162, 180, 201),
-            error: Color32::from_rgb(255, 165, 150),
-        }
-    } else {
-        Palette {
-            ink: INK,
-            paper: PAPER,
-            muted: MUTED,
-            error: Color32::from_rgb(170, 63, 52),
-        }
-    }
-}
-
-fn apply_theme(ctx: &egui::Context, theme: Theme) {
-    let colors = palette(theme);
-    let mut style = (*ctx.global_style()).clone();
-    style.visuals = if theme == Theme::Dark {
-        egui::Visuals::dark()
-    } else {
-        egui::Visuals::light()
-    };
-    style.visuals.override_text_color = Some(colors.ink);
-    style.visuals.panel_fill = colors.paper;
-    style.visuals.window_fill = colors.paper;
-    style.visuals.widgets.noninteractive.bg_fill = colors.paper;
-    style.visuals.widgets.inactive.bg_fill = if theme == Theme::Dark {
-        Color32::from_rgb(38, 50, 67)
-    } else {
-        Color32::from_rgb(236, 242, 250)
-    };
-    style.visuals.widgets.hovered.bg_fill = if theme == Theme::Dark {
-        Color32::from_rgb(54, 74, 101)
-    } else {
-        Color32::from_rgb(220, 233, 250)
-    };
-    style.visuals.selection.bg_fill = if theme == Theme::Dark {
-        Color32::from_rgb(45, 79, 128)
-    } else {
-        Color32::from_rgb(169, 201, 246)
-    };
-    style.spacing.item_spacing = Vec2::new(8.0, 9.0);
-    style.spacing.interact_size.y = 32.0;
-    style.spacing.button_padding = Vec2::new(11.0, 6.0);
-    style
-        .text_styles
-        .insert(egui::TextStyle::Body, egui::FontId::proportional(14.0));
-    style
-        .text_styles
-        .insert(egui::TextStyle::Button, egui::FontId::proportional(13.0));
-    ctx.set_global_style(style);
-}
-
-#[derive(Clone, Copy)]
-struct ConversationClock {
-    started: Instant,
-    ended: Option<Instant>,
-    previous: Duration,
-}
-impl ConversationClock {
-    fn elapsed(self, now: Instant) -> Duration {
-        self.ended
-            .unwrap_or(now)
-            .saturating_duration_since(self.started)
-            .saturating_add(self.previous)
-    }
-    fn finish(&mut self, now: Instant) {
-        if self.ended.is_none() {
-            self.ended = Some(now);
-        }
-    }
-}
-fn format_duration(duration: Duration) -> String {
-    let seconds = duration.as_secs();
-    if seconds >= 3600 {
-        format!(
-            "{}:{:02}:{:02}",
-            seconds / 3600,
-            (seconds / 60) % 60,
-            seconds % 60
-        )
-    } else {
-        format!("{:02}:{:02}", seconds / 60, seconds % 60)
-    }
-}
-
-#[derive(Clone)]
-struct LogSession {
-    voice: String,
-    clock: ConversationClock,
-}
-
-struct Line {
-    speaker: Speaker,
-    session: usize,
-    text: String,
-    id: Option<String>,
-    updated: Instant,
-    historical: bool,
-}
-#[derive(Default)]
-struct Transcript {
-    lines: Vec<Line>,
-    sessions: Vec<LogSession>,
-    current_session: Option<usize>,
-    active_user: Option<usize>,
-    active_partner: Option<usize>,
-}
-
-#[derive(Default)]
-struct SpeechIndicator {
-    speaking: bool,
-    started: Option<Instant>,
-    last_sound: Option<Instant>,
-}
-impl SpeechIndicator {
-    fn update(&mut self, now: Instant, level: f32) {
-        let recent = self
-            .last_sound
-            .is_some_and(|last| now.duration_since(last) < Duration::from_millis(150));
-        if level > 0.015 {
-            if !recent {
-                self.started = Some(now);
-            }
-            self.last_sound = Some(now);
-            if self
-                .started
-                .is_some_and(|start| now.duration_since(start) >= Duration::from_millis(100))
-            {
-                self.speaking = true;
-            }
-        } else if self.speaking
-            && self
-                .last_sound
-                .is_some_and(|last| now.duration_since(last) >= Duration::from_millis(750))
-        {
-            self.speaking = false;
-            self.started = None;
-        }
-    }
-}
-impl Transcript {
-    fn begin_session(&mut self, voice: String, now: Instant) {
-        self.end_turn();
-        self.sessions.push(LogSession {
-            voice,
-            clock: ConversationClock {
-                started: now,
-                ended: None,
-                previous: Duration::ZERO,
-            },
-        });
-        self.current_session = Some(self.sessions.len() - 1);
-    }
-    fn finish_session(&mut self, now: Instant) {
-        if let Some(index) = self.current_session.take() {
-            self.sessions[index].clock.finish(now);
-        }
-        self.end_turn();
-    }
-    fn speaker_name<'a>(&'a self, line: &Line, language: UiLanguage) -> &'a str {
-        if line.speaker == Speaker::User {
-            language.text("You")
-        } else {
-            &self.sessions[line.session].voice
-        }
-    }
-    fn append(&mut self, speaker: Speaker, text: String, id: Option<String>, replace: bool) {
-        let Some(session) = self.current_session else {
-            return;
-        };
-        if text.is_empty() {
-            return;
-        }
-        let matching_id = id.as_ref().and_then(|id| {
-            self.lines.iter().position(|l| {
-                l.session == session && l.speaker == speaker && l.id.as_ref() == Some(id)
-            })
-        });
-        let active = if speaker == Speaker::User {
-            self.active_user
-        } else {
-            self.active_partner
-        };
-        let index = matching_id
-            .or_else(|| if id.is_none() { active } else { None })
-            .unwrap_or_else(|| {
-                self.lines.push(Line {
-                    speaker,
-                    session,
-                    text: String::new(),
-                    id: id.clone(),
-                    updated: Instant::now(),
-                    historical: false,
-                });
-                self.lines.len() - 1
-            });
-        let line = &mut self.lines[index];
-        if replace || (!line.text.is_empty() && text.starts_with(&line.text)) {
-            line.text = text;
-        } else {
-            line.text.push_str(&text);
-        }
-        line.updated = Instant::now();
-        if speaker == Speaker::User {
-            self.active_user = Some(index);
-        } else {
-            self.active_partner = Some(index);
-            self.active_user = None;
-        }
-    }
-    fn end_turn(&mut self) {
-        self.active_user = None;
-        self.active_partner = None;
-    }
-    fn clear(&mut self) {
-        let active = self
-            .current_session
-            .map(|index| self.sessions[index].clone());
-        *self = Self::default();
-        if let Some(session) = active {
-            self.sessions.push(session);
-            self.current_session = Some(0);
-        }
-    }
-    fn text(&self, language: UiLanguage) -> String {
-        let now = Instant::now();
-        self.sessions
-            .iter()
-            .enumerate()
-            .map(|(index, session)| {
-                let mut text = format!(
-                    "{} · {} · {}",
-                    language.text("Conversation"),
-                    session.voice,
-                    format_duration(session.clock.elapsed(now))
-                );
-                for line in self.lines.iter().filter(|line| line.session == index) {
-                    text.push_str(&format!(
-                        "\n\n{}: {}",
-                        self.speaker_name(line, language),
-                        line.text.trim()
-                    ));
-                }
-                text
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n---\n\n")
-    }
-    fn from_record(record: &ChatRecord, now: Instant) -> Self {
-        let mut transcript = Self::default();
-        for session in &record.sessions {
-            let index = transcript.sessions.len();
-            transcript.sessions.push(LogSession {
-                voice: session.voice.clone(),
-                clock: ConversationClock {
-                    started: now,
-                    ended: Some(now),
-                    previous: Duration::from_secs(session.duration_seconds),
-                },
-            });
-            for message in &session.messages {
-                transcript.lines.push(Line {
-                    speaker: message.speaker,
-                    session: index,
-                    text: message.text.clone(),
-                    id: None,
-                    updated: now,
-                    historical: true,
-                });
-            }
-        }
-        transcript
-    }
-    fn saved_sessions(&self, now: Instant) -> Vec<SavedSession> {
-        self.sessions
-            .iter()
-            .enumerate()
-            .map(|(index, session)| SavedSession {
-                voice: session.voice.clone(),
-                duration_seconds: session.clock.elapsed(now).as_secs(),
-                messages: self
-                    .lines
-                    .iter()
-                    .filter(|line| line.session == index)
-                    .map(|line| MemoryMessage {
-                        speaker: line.speaker,
-                        text: line.text.clone(),
-                    })
-                    .collect(),
-            })
-            .collect()
-    }
-}
+use library_search::LibrarySearch;
+use theme::{apply_theme, palette, BLUE};
+use transcript::{format_duration, ConversationClock, SpeechIndicator, Transcript};
+use windowing::WindowPlacement;
 
 pub struct App {
     settings: Settings,
@@ -360,12 +54,15 @@ pub struct App {
     active_voice: String,
     applied_theme: Theme,
     window_positions: WindowPositions,
+    settings_placement: WindowPlacement,
+    log_placement: WindowPlacement,
     positions_dirty: bool,
     store: ChatStore,
     selected_chat: Option<ChatRecord>,
     library_open: bool,
     library_query: String,
     library: Vec<ChatRecord>,
+    library_search: LibrarySearch,
     library_warning: String,
     history_dirty: bool,
     history_last_saved: Instant,
@@ -444,12 +141,15 @@ impl App {
             active_voice: String::new(),
             applied_theme,
             window_positions: WindowPositions::load(),
+            settings_placement: WindowPlacement::default(),
+            log_placement: WindowPlacement::default(),
             positions_dirty: false,
             store: ChatStore::beside_executable(),
             selected_chat: None,
             library_open: false,
             library_query: String::new(),
             library: Vec::new(),
+            library_search: LibrarySearch::default(),
             library_warning: String::new(),
             history_dirty: false,
             history_last_saved: Instant::now(),
@@ -543,90 +243,6 @@ impl App {
         self.stopping = true;
         self.connected = false;
     }
-    fn update_events(&mut self) {
-        let events: Vec<Event> = self
-            .receiver
-            .as_ref()
-            .map(|rx| rx.try_iter().collect())
-            .unwrap_or_default();
-        for event in events {
-            match event {
-                Event::Ready => {
-                    if self.stopping {
-                        continue;
-                    }
-                    if !self.cue_started {
-                        audio::play_cue(Cue::Start);
-                        self.cue_started = true;
-                    }
-                    if self.clock.is_none() {
-                        let now = Instant::now();
-                        self.clock = Some(ConversationClock {
-                            started: now,
-                            ended: None,
-                            previous: Duration::ZERO,
-                        });
-                        self.transcript
-                            .begin_session(self.active_voice.clone(), now);
-                        if self.selected_chat.is_none() {
-                            self.selected_chat =
-                                Some(ChatRecord::new(self.settings.language.clone()));
-                        }
-                        self.history_dirty = true;
-                    }
-                    self.connected = true;
-                    self.stopping = false;
-                    self.error = false;
-                    self.status = "Listening when you are ready".into();
-                }
-                Event::Status(message) => {
-                    self.connected = false;
-                    self.status = message;
-                }
-                Event::Error(message) => {
-                    self.finish_conversation(Instant::now());
-                    self.error = true;
-                    self.connected = false;
-                    self.status = message;
-                    self.session = None;
-                    self.receiver = None;
-                    self.stopping = false;
-                }
-                Event::Stopped => {
-                    self.finish_conversation(Instant::now());
-                    self.session = None;
-                    self.receiver = None;
-                    self.connected = false;
-                    self.stopping = false;
-                    self.muted = false;
-                    self.cue_started = false;
-                    self.indicator = SpeechIndicator::default();
-                    self.talking = false;
-                    self.idle_since = Instant::now();
-                    if !self.error {
-                        self.status = "Conversation ended".into();
-                    }
-                    self.transcript.end_turn();
-                }
-                Event::Transcript {
-                    speaker,
-                    text,
-                    id,
-                    replace,
-                } => {
-                    self.transcript.append(speaker, text, id, replace);
-                    self.history_dirty = self.selected_chat.is_some();
-                }
-                Event::TurnEnd => self.transcript.end_turn(),
-            }
-        }
-        if self.history_dirty && self.history_last_saved.elapsed() >= Duration::from_secs(1) {
-            self.flush_history();
-        } else if self.connected && self.history_last_saved.elapsed() >= Duration::from_secs(10) {
-            self.history_dirty = true;
-            self.flush_history();
-        }
-    }
     fn levels(&self) -> (f32, f32) {
         self.session
             .as_ref()
@@ -645,6 +261,10 @@ impl App {
         self.history_dirty |= was_active && self.selected_chat.is_some();
         if self.history_dirty {
             self.flush_history();
+        }
+        if was_active && self.settings.open_log_after_conversation {
+            self.library_open = false;
+            self.log_open = true;
         }
     }
     fn freeze_conversation(&mut self, now: Instant) {
@@ -696,6 +316,7 @@ impl App {
         match self.store.list() {
             Ok((records, skipped)) => {
                 self.library = records;
+                self.library_search.invalidate();
                 self.library_warning = if skipped == 0 {
                     String::new()
                 } else {
@@ -765,6 +386,7 @@ impl App {
             return;
         }
         self.settings_open = false;
+        self.settings_placement.reset();
         self.shortcut_capture = false;
         self.save_positions();
     }
@@ -855,253 +477,19 @@ impl Drop for App {
     }
 }
 
+mod events;
 mod interface;
+mod interface_helpers;
+mod library_search;
 mod log;
+mod partner_name;
 mod settings;
+mod settings_window;
+
+mod theme;
+mod transcript;
+mod voices;
+mod windowing;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[cfg(windows)]
-    fn request_exit(app: &mut App, ctx: &egui::Context) -> egui::FullOutput {
-        let mut input = egui::RawInput::default();
-        input
-            .viewports
-            .entry(egui::ViewportId::ROOT)
-            .or_default()
-            .events
-            .push(egui::ViewportEvent::Close);
-        let mut frame = eframe::Frame::_new_kittest();
-        ctx.run_ui(input, |ui| eframe::App::logic(app, ui.ctx(), &mut frame))
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn exiting_app_saves_a_pending_key_or_cancels_exit_on_failure() {
-        let namespace = format!(
-            "Speeching/test/app-exit/{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
-        let store = credentials::Store::isolated(&namespace);
-        let context = eframe::CreationContext::_new_kittest(egui::Context::default());
-        let mut app = App::with_settings_and_store(&context, Settings::default(), store.clone());
-        app.gemini_key = "synthetic-exit-key".into();
-
-        let mut success = request_exit(&mut app, &context.egui_ctx);
-        let saved_key = store.load(Provider::Gemini);
-        app.gemini_key = "x".repeat(2561);
-        let mut failure = request_exit(&mut app, &context.egui_ctx);
-        let retained_key = store.load(Provider::Gemini);
-        store.forget(Provider::Gemini).unwrap();
-
-        let cancelled = |output: &egui::FullOutput| {
-            output.viewport_output[&egui::ViewportId::ROOT]
-                .commands
-                .contains(&egui::ViewportCommand::CancelClose)
-        };
-        let success_cancelled = cancelled(&success);
-        let failure_cancelled = cancelled(&failure);
-        success.textures_delta.clear();
-        failure.textures_delta.clear();
-        assert!(!success_cancelled);
-        assert!(failure_cancelled);
-        assert_eq!(saved_key.unwrap().as_deref(), Some("synthetic-exit-key"));
-        assert_eq!(retained_key.unwrap().as_deref(), Some("synthetic-exit-key"));
-        assert_eq!(app.gemini_key.len(), 2561);
-        assert!(app.settings_open);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn closing_settings_saves_pending_keys_for_both_providers() {
-        let namespace = format!(
-            "Speeching/test/settings-close/{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
-        let store = credentials::Store::isolated(&namespace);
-        let context = eframe::CreationContext::_new_kittest(egui::Context::default());
-        let mut app = App::with_settings_and_store(&context, Settings::default(), store.clone());
-        app.settings_open = true;
-        app.gemini_key = "synthetic-gemini-key".into();
-        app.openai_key = "synthetic-openai-key".into();
-
-        app.close_settings();
-        let gemini = store.load(Provider::Gemini);
-        let openai = store.load(Provider::OpenAi);
-        let mut restart_settings = Settings::default();
-        restart_settings.gemini_model.clear();
-        let mut restarted = App::with_settings_and_store(&context, restart_settings, store.clone());
-        let saved_flags = (restarted.gemini_key_saved, restarted.openai_key_saved);
-        let drafts_empty = (
-            restarted.gemini_key.is_empty(),
-            restarted.openai_key.is_empty(),
-        );
-        restarted.start();
-        let start_status = restarted.status.clone();
-        store.forget(Provider::Gemini).unwrap();
-        store.forget(Provider::OpenAi).unwrap();
-
-        assert_eq!(saved_flags, (true, true));
-        assert_eq!(drafts_empty, (true, true));
-        assert_eq!(
-            start_status,
-            "Choose a language, model, and voice in settings."
-        );
-        assert_eq!(gemini.unwrap().as_deref(), Some("synthetic-gemini-key"));
-        assert_eq!(openai.unwrap().as_deref(), Some("synthetic-openai-key"));
-        assert!(!app.settings_open);
-    }
-    #[cfg(windows)]
-    #[test]
-    fn failed_key_save_keeps_settings_and_draft_open() {
-        let namespace = format!("Speeching/test/save-failure/{}", std::process::id());
-        let store = credentials::Store::isolated(&namespace);
-        store
-            .save(Provider::Gemini, "synthetic-original-key")
-            .unwrap();
-        let context = eframe::CreationContext::_new_kittest(egui::Context::default());
-        let mut app = App::with_settings_and_store(&context, Settings::default(), store.clone());
-        app.settings_open = true;
-        app.gemini_key = "x".repeat(2561);
-
-        app.close_settings();
-        let existing_key = store.load(Provider::Gemini);
-        store.forget(Provider::Gemini).unwrap();
-
-        assert!(app.settings_open);
-        assert_eq!(
-            existing_key.unwrap().as_deref(),
-            Some("synthetic-original-key")
-        );
-        assert_eq!(app.gemini_key.len(), 2561);
-        assert_eq!(app.key_feedback, "API key is too long to save.");
-        assert_eq!(app.settings_section, SettingsSection::Provider);
-    }
-    #[test]
-    fn speaking_indicator_holds_through_brief_pauses() {
-        let start = Instant::now();
-        let mut indicator = SpeechIndicator::default();
-        indicator.update(start, 0.05);
-        assert!(!indicator.speaking);
-        indicator.update(start + Duration::from_millis(120), 0.05);
-        assert!(indicator.speaking);
-        indicator.update(start + Duration::from_millis(500), 0.0);
-        assert!(indicator.speaking);
-        indicator.update(start + Duration::from_millis(900), 0.0);
-        assert!(!indicator.speaking);
-        indicator.update(start + Duration::from_millis(920), 0.05);
-        indicator.update(start + Duration::from_millis(950), 0.0);
-        assert!(!indicator.speaking);
-    }
-    #[test]
-    fn transcript_keeps_full_history_and_updates_completed_items() {
-        let mut t = Transcript::default();
-        let start = Instant::now();
-        t.begin_session("Aoede".into(), start);
-        t.append(Speaker::User, "Hel".into(), Some("a".into()), false);
-        t.append(Speaker::User, "lo".into(), Some("a".into()), false);
-        t.append(Speaker::User, "Hello!".into(), Some("a".into()), true);
-        t.append(Speaker::Partner, "Hi.".into(), None, false);
-        assert_eq!(t.lines.len(), 2);
-        t.finish_session(start + Duration::from_secs(71));
-        assert_eq!(
-            t.text(UiLanguage::English),
-            "Conversation · Aoede · 01:11\n\nYou: Hello!\n\nAoede: Hi."
-        );
-        assert_eq!(
-            t.text(UiLanguage::Spanish),
-            "Conversación · Aoede · 01:11\n\nTú: Hello!\n\nAoede: Hi."
-        );
-        assert_eq!(
-            t.text(UiLanguage::PortugueseBrazil),
-            "Conversa · Aoede · 01:11\n\nVocê: Hello!\n\nAoede: Hi."
-        );
-        t.clear();
-        assert!(t.lines.is_empty());
-    }
-    #[test]
-    fn loaded_sessions_keep_duration_voice_and_do_not_appear_as_new_bubbles() {
-        let mut record = ChatRecord::new("Spanish".into());
-        record.sessions.push(SavedSession {
-            voice: "Aoede".into(),
-            duration_seconds: 90_000,
-            messages: vec![MemoryMessage {
-                speaker: Speaker::User,
-                text: "Hola".into(),
-            }],
-        });
-        let now = Instant::now();
-        let mut transcript = Transcript::from_record(&record, now);
-        assert_eq!(transcript.saved_sessions(now)[0].duration_seconds, 90_000);
-        assert!(transcript.lines[0].historical);
-        transcript.begin_session("Puck".into(), now);
-        transcript.append(Speaker::Partner, "Hola".into(), None, false);
-        assert_eq!(
-            transcript.speaker_name(&transcript.lines[1], UiLanguage::English),
-            "Puck"
-        );
-        assert!(!transcript.lines[1].historical);
-    }
-    #[test]
-    fn log_keeps_each_conversations_voice_and_duration_and_clear_keeps_active_clock() {
-        let mut transcript = Transcript::default();
-        let start = Instant::now();
-        transcript.begin_session("Aoede".into(), start);
-        transcript.append(Speaker::Partner, "First".into(), Some("same".into()), false);
-        transcript.finish_session(start + Duration::from_secs(10));
-        transcript.begin_session("Puck".into(), start + Duration::from_secs(12));
-        transcript.append(
-            Speaker::Partner,
-            "Second".into(),
-            Some("same".into()),
-            false,
-        );
-        transcript.finish_session(start + Duration::from_secs(75));
-        let text = transcript.text(UiLanguage::English);
-        assert!(text.contains("Conversation · Aoede · 00:10\n\nAoede: First"));
-        assert!(text.contains("Conversation · Puck · 01:03\n\nPuck: Second"));
-        transcript.begin_session("Leda".into(), start + Duration::from_secs(80));
-        transcript.clear();
-        assert_eq!(transcript.sessions.len(), 1);
-        assert_eq!(transcript.sessions[0].voice, "Leda");
-        assert_eq!(
-            transcript.sessions[0]
-                .clock
-                .elapsed(start + Duration::from_secs(100))
-                .as_secs(),
-            20
-        );
-        assert_eq!(format_duration(Duration::from_secs(3_661)), "1:01:01");
-    }
-    #[test]
-    fn theme_text_remains_legible_on_its_background() {
-        fn luminance(color: Color32) -> f32 {
-            let channel = |value: u8| {
-                let value = value as f32 / 255.0;
-                if value <= 0.04045 {
-                    value / 12.92
-                } else {
-                    ((value + 0.055) / 1.055).powf(2.4)
-                }
-            };
-            0.2126 * channel(color.r()) + 0.7152 * channel(color.g()) + 0.0722 * channel(color.b())
-        }
-        for theme in [Theme::Light, Theme::Dark] {
-            let colors = palette(theme);
-            let background = luminance(colors.paper);
-            for foreground in [colors.ink, colors.muted, colors.error] {
-                let value = luminance(foreground);
-                let contrast = (value.max(background) + 0.05) / (value.min(background) + 0.05);
-                assert!(contrast >= 4.5, "{theme:?}: {contrast}");
-            }
-        }
-    }
-}
+mod tests;

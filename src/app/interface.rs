@@ -1,7 +1,7 @@
+use super::interface_helpers::{icon_button, paint_bubbles, wave_envelope, BubbleStyle, Icon};
 use super::*;
 use eframe::egui::{
-    Align, FontId, Layout, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Vec2, ViewportBuilder,
-    ViewportId,
+    Align, Layout, Pos2, Rect, RichText, Sense, Stroke, Vec2, ViewportBuilder, ViewportId,
 };
 use std::time::{Duration, Instant};
 
@@ -19,70 +19,97 @@ impl App {
                 );
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if icon_button(ui, Icon::Settings, self.settings_open, lang)
-                    .on_hover_text(lang.text(if self.settings_open {
-                        "Close settings"
-                    } else {
-                        "Open settings"
-                    }))
-                    .clicked()
-                {
-                    if self.settings_open {
-                        self.close_settings();
-                    } else {
-                        self.settings_open = true;
-                    }
-                }
-                if icon_button(ui, Icon::Log, self.log_open, lang)
-                    .on_hover_text(lang.text(if self.log_open {
-                        "Close conversation log"
-                    } else {
-                        "Open conversation log"
-                    }))
-                    .clicked()
-                {
-                    self.log_open = !self.log_open;
-                    if !self.log_open {
-                        self.delete_confirm = false;
-                        self.rename_active = false;
-                        self.save_positions();
-                    }
-                }
-                if icon_button(ui, Icon::Eye, self.settings.minimal, lang)
-                    .on_hover_text(lang.text(if self.settings.minimal {
-                        "Show bubbles"
-                    } else {
-                        "Hide conversation text"
-                    }))
-                    .clicked()
-                {
-                    self.settings.minimal = !self.settings.minimal;
-                    if let Err(error) = self.settings.save() {
-                        self.status = format!("Could not save settings: {error}");
-                        self.error = true;
-                    }
-                }
-                if self.connected
-                    && icon_button(ui, Icon::Mic, self.muted, lang)
-                        .on_hover_text(lang.text(if self.muted {
-                            "Unmute microphone"
-                        } else {
-                            "Mute microphone"
-                        }))
-                        .clicked()
-                {
-                    self.muted = !self.muted;
-                    audio::play_cue(if self.muted {
-                        Cue::MicrophoneOff
-                    } else {
-                        Cue::MicrophoneOn
-                    });
-                    if let Some(session) = &self.session {
-                        session.mute(self.muted);
-                    }
-                }
+                self.settings_button(ui, lang);
+                self.log_button(ui, lang);
+                self.minimal_button(ui, lang);
+                self.mute_button(ui, lang);
             });
         });
+    }
+
+    fn settings_button(&mut self, ui: &mut egui::Ui, lang: UiLanguage) {
+        let hint = if self.settings_open {
+            "Close settings"
+        } else {
+            "Open settings"
+        };
+        if !icon_button(ui, Icon::Settings, self.settings_open, lang)
+            .on_hover_text(lang.text(hint))
+            .clicked()
+        {
+            return;
+        }
+        if self.settings_open {
+            self.close_settings();
+        } else {
+            self.settings_open = true;
+        }
+    }
+
+    fn log_button(&mut self, ui: &mut egui::Ui, lang: UiLanguage) {
+        let hint = if self.log_open {
+            "Close conversation log"
+        } else {
+            "Open conversation log"
+        };
+        if !icon_button(ui, Icon::Log, self.log_open, lang)
+            .on_hover_text(lang.text(hint))
+            .clicked()
+        {
+            return;
+        }
+        self.log_open = !self.log_open;
+        if !self.log_open {
+            self.log_placement.reset();
+            self.delete_confirm = false;
+            self.rename_active = false;
+            self.save_positions();
+        }
+    }
+
+    fn minimal_button(&mut self, ui: &mut egui::Ui, lang: UiLanguage) {
+        let hint = if self.settings.minimal {
+            "Show bubbles"
+        } else {
+            "Hide conversation text"
+        };
+        if !icon_button(ui, Icon::Eye, self.settings.minimal, lang)
+            .on_hover_text(lang.text(hint))
+            .clicked()
+        {
+            return;
+        }
+        self.settings.minimal = !self.settings.minimal;
+        if let Err(error) = self.settings.save() {
+            self.status = format!("Could not save settings: {error}");
+            self.error = true;
+        }
+    }
+
+    fn mute_button(&mut self, ui: &mut egui::Ui, lang: UiLanguage) {
+        if !self.connected {
+            return;
+        }
+        let hint = if self.muted {
+            "Unmute microphone"
+        } else {
+            "Mute microphone"
+        };
+        if !icon_button(ui, Icon::Mic, self.muted, lang)
+            .on_hover_text(lang.text(hint))
+            .clicked()
+        {
+            return;
+        }
+        self.muted = !self.muted;
+        audio::play_cue(if self.muted {
+            Cue::MicrophoneOff
+        } else {
+            Cue::MicrophoneOn
+        });
+        if let Some(session) = &self.session {
+            session.mute(self.muted);
+        }
     }
 
     fn microphone(&mut self, ui: &mut egui::Ui, size: f32) {
@@ -104,51 +131,20 @@ impl App {
         let p = ui.painter_at(rect);
         let (input, output) = self.levels();
         let pulse = (input * 6.0).max(output * 5.0).clamp(0.0, 1.0);
-        let idle_time = self.idle_since.elapsed().as_secs_f32() % 13.0;
-        let nudge = if !active && (0.7..2.1).contains(&idle_time) {
-            let t = idle_time - 0.7;
-            (t * 17.0).sin() * (1.0 - t / 1.4) * 3.0
-        } else {
-            0.0
-        };
+        let nudge = microphone_nudge(active, self.idle_since.elapsed());
+        let (outer, inner, fill) = microphone_colors(active, response.hovered());
         let ring_center = center + Vec2::new(nudge, 0.0);
         p.circle_stroke(
             ring_center,
             radius + 9.0 + pulse * 3.0,
-            Stroke::new(
-                1.0_f32,
-                if active {
-                    Color32::from_rgb(222, 183, 184)
-                } else {
-                    Color32::from_rgb(196, 214, 239)
-                },
-            ),
+            Stroke::new(1.0_f32, outer),
         );
         p.circle_stroke(
             center - Vec2::new(nudge * 0.5, 0.0),
             radius + 5.0,
-            Stroke::new(
-                1.0_f32,
-                if active {
-                    Color32::from_rgb(196, 131, 136)
-                } else {
-                    Color32::from_rgb(149, 180, 224)
-                },
-            ),
+            Stroke::new(1.0_f32, inner),
         );
-        p.circle_filled(
-            center,
-            radius,
-            if active && response.hovered() {
-                Color32::from_rgb(119, 39, 48)
-            } else if active {
-                Color32::from_rgb(147, 48, 58)
-            } else if response.hovered() {
-                Color32::from_rgb(29, 83, 198)
-            } else {
-                BLUE
-            },
-        );
+        p.circle_filled(center, radius, fill);
         let white = Color32::WHITE;
         let line = Stroke::new(2.6_f32, white);
         p.rect_filled(
@@ -362,15 +358,166 @@ impl App {
                             ui,
                             rect,
                             &self.transcript,
-                            self.settings.fade_seconds,
-                            now,
-                            self.settings.theme,
-                            self.settings.ui_language,
+                            BubbleStyle {
+                                seconds: self.settings.fade_seconds,
+                                now,
+                                theme: self.settings.theme,
+                                language: self.settings.ui_language,
+                            },
                         );
                     });
             },
         );
     }
+    fn position_initial_window(&mut self, ctx: &egui::Context) {
+        if self.initial_positioned {
+            return;
+        }
+        let viewport = ctx.input(|input| input.viewport().clone());
+        let (Some(rect), Some(monitor)) = (viewport.outer_rect, viewport.monitor_size) else {
+            return;
+        };
+        self.initial_positioned = true;
+        let bubble_space = 250.0;
+        if rect.top() >= 0.0
+            && rect.top() < bubble_space
+            && monitor.y - rect.height() >= bubble_space
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(Pos2::new(
+                rect.left(),
+                bubble_space,
+            )));
+        }
+    }
+
+    fn update_talk_input(&mut self, ctx: &egui::Context) {
+        let focused = ctx.input(|input| input.viewport().focused.unwrap_or(false));
+        let push_to_talk =
+            self.connected && self.active_input_mode == InputMode::PushToTalk && focused;
+        let hold = self.talk_shortcut_held(ctx, push_to_talk);
+        if push_to_talk {
+            self.consume_talk_shortcut(ctx);
+        }
+        if hold == self.talking {
+            return;
+        }
+        self.talking = hold;
+        if self.connected && !self.muted {
+            audio::play_cue(if hold {
+                Cue::MicrophoneOn
+            } else {
+                Cue::MicrophoneOff
+            });
+        }
+        if let Some(session) = &self.session {
+            session.talk(hold);
+        }
+    }
+
+    fn talk_shortcut_held(&self, ctx: &egui::Context, push_to_talk: bool) -> bool {
+        push_to_talk
+            && !self.muted
+            && ctx.input(|input| {
+                input.key_down(self.active_shortcut.key())
+                    && self.active_shortcut.matches(input.modifiers)
+            })
+    }
+
+    fn consume_talk_shortcut(&self, ctx: &egui::Context) {
+        // The shortcut belongs to the microphone, not a focused button.
+        ctx.input_mut(|input| input.events.retain(|event| {
+            !matches!(event, egui::Event::Key { key, modifiers, .. } if *key == self.active_shortcut.key() && self.active_shortcut.matches(*modifiers))
+        }));
+    }
+
+    fn main_content(&mut self, ui: &mut egui::Ui) {
+        let colors = palette(self.settings.theme);
+        let lang = self.settings.ui_language;
+        self.top_bar(ui);
+        let circle_size = (ui.available_height() * 0.43).clamp(125.0, 155.0);
+        ui.add_space(11.0);
+        self.microphone(ui, circle_size);
+        if !self.settings.minimal {
+            ui.vertical_centered(|ui| {
+                ui.label(
+                    RichText::new(self.status_label(lang))
+                        .size(13.0)
+                        .color(if self.error {
+                            colors.error
+                        } else {
+                            colors.muted
+                        }),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {}",
+                        lang.text(&self.settings.language),
+                        self.transcript.partner_name(lang)
+                    ))
+                    .size(11.0)
+                    .color(colors.muted),
+                );
+                if let Some(clock) = self.clock {
+                    ui.label(
+                        RichText::new(format_duration(clock.elapsed(Instant::now())))
+                            .size(13.0)
+                            .strong()
+                            .color(colors.ink),
+                    );
+                }
+            });
+        } else if self.error {
+            ui.colored_label(colors.error, lang.message(&self.status));
+        }
+        ui.add_space(5.0);
+        let wave_height = ui.available_height().clamp(30.0, 75.0);
+        self.waveform(ui, wave_height);
+    }
+
+    fn status_label(&self, lang: UiLanguage) -> String {
+        if self.error || !self.connected {
+            lang.message(&self.status)
+        } else if self.muted {
+            lang.text("Microphone muted").into()
+        } else if self.active_input_mode == InputMode::PushToTalk && self.talking {
+            lang.format("Release {0} to send", &self.active_shortcut.label_in(lang))
+        } else if self.indicator.speaking {
+            lang.text("Speaking…").into()
+        } else if self.active_input_mode == InputMode::PushToTalk {
+            lang.format("Hold {0} to speak", &self.active_shortcut.label_in(lang))
+        } else {
+            lang.text("Listening…").into()
+        }
+    }
+}
+
+fn microphone_nudge(active: bool, elapsed: Duration) -> f32 {
+    let idle_time = elapsed.as_secs_f32() % 13.0;
+    if active || !(0.7..2.1).contains(&idle_time) {
+        return 0.0;
+    }
+    let t = idle_time - 0.7;
+    (t * 17.0).sin() * (1.0 - t / 1.4) * 3.0
+}
+
+fn microphone_colors(active: bool, hovered: bool) -> (Color32, Color32, Color32) {
+    let outer = if active {
+        Color32::from_rgb(222, 183, 184)
+    } else {
+        Color32::from_rgb(196, 214, 239)
+    };
+    let inner = if active {
+        Color32::from_rgb(196, 131, 136)
+    } else {
+        Color32::from_rgb(149, 180, 224)
+    };
+    let fill = match (active, hovered) {
+        (true, true) => Color32::from_rgb(119, 39, 48),
+        (true, false) => Color32::from_rgb(147, 48, 58),
+        (false, true) => Color32::from_rgb(29, 83, 198),
+        (false, false) => BLUE,
+    };
+    (outer, inner, fill)
 }
 
 impl eframe::App for App {
@@ -390,56 +537,9 @@ impl eframe::App for App {
             apply_theme(&ctx, self.applied_theme);
         }
         let colors = palette(self.settings.theme);
-        let lang = self.settings.ui_language;
-        if !self.initial_positioned {
-            let viewport = ctx.input(|input| input.viewport().clone());
-            if let (Some(rect), Some(monitor)) = (viewport.outer_rect, viewport.monitor_size) {
-                self.initial_positioned = true;
-                let bubble_space = 250.0;
-                if rect.top() >= 0.0
-                    && rect.top() < bubble_space
-                    && monitor.y - rect.height() >= bubble_space
-                {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(Pos2::new(
-                        rect.left(),
-                        bubble_space,
-                    )));
-                }
-            }
-        }
+        self.position_initial_window(&ctx);
         self.update_events();
-        let hold_to_talk = self.connected
-            && !self.muted
-            && self.active_input_mode == InputMode::PushToTalk
-            && ctx.input(|i| {
-                i.viewport().focused.unwrap_or(false)
-                    && i.key_down(self.active_shortcut.key())
-                    && self.active_shortcut.matches(i.modifiers)
-            });
-        if self.connected
-            && self.active_input_mode == InputMode::PushToTalk
-            && ctx.input(|i| i.viewport().focused.unwrap_or(false))
-        {
-            // The push-to-talk shortcut belongs to the microphone, not a focused button.
-            ctx.input_mut(|i| {
-                i.events.retain(|event| {
-                    !matches!(event, egui::Event::Key { key, modifiers, .. } if *key == self.active_shortcut.key() && self.active_shortcut.matches(*modifiers))
-                })
-            });
-        }
-        if hold_to_talk != self.talking {
-            self.talking = hold_to_talk;
-            if self.connected && !self.muted {
-                audio::play_cue(if hold_to_talk {
-                    Cue::MicrophoneOn
-                } else {
-                    Cue::MicrophoneOff
-                });
-            }
-            if let Some(session) = &self.session {
-                session.talk(hold_to_talk);
-            }
-        }
+        self.update_talk_input(&ctx);
         self.indicator.update(Instant::now(), self.levels().1);
         ctx.request_repaint_after(Duration::from_millis(33));
         egui::CentralPanel::default()
@@ -448,354 +548,9 @@ impl eframe::App for App {
                     .fill(colors.paper)
                     .inner_margin(egui::Margin::same(19)),
             )
-            .show(root_ui, |ui| {
-                self.top_bar(ui);
-                let circle_size = (ui.available_height() * 0.43).clamp(125.0, 155.0);
-                ui.add_space(11.0);
-                self.microphone(ui, circle_size);
-                if !self.settings.minimal {
-                    let label = if self.error || !self.connected {
-                        lang.message(&self.status)
-                    } else if self.muted {
-                        lang.text("Microphone muted").into()
-                    } else if self.active_input_mode == InputMode::PushToTalk && self.talking {
-                        lang.format("Release {0} to send", &self.active_shortcut.label_in(lang))
-                    } else if self.indicator.speaking {
-                        lang.text("Speaking…").into()
-                    } else if self.active_input_mode == InputMode::PushToTalk {
-                        lang.format("Hold {0} to speak", &self.active_shortcut.label_in(lang))
-                    } else {
-                        lang.text("Listening…").into()
-                    };
-                    ui.vertical_centered(|ui| {
-                        ui.label(RichText::new(label).size(13.0).color(if self.error {
-                            colors.error
-                        } else {
-                            colors.muted
-                        }));
-                        ui.label(
-                            RichText::new(format!(
-                                "{} · {}",
-                                lang.text(&self.settings.language),
-                                if self.session.is_some() {
-                                    self.active_voice.as_str()
-                                } else {
-                                    self.settings.voice()
-                                }
-                            ))
-                            .size(11.0)
-                            .color(colors.muted),
-                        );
-                        if let Some(clock) = self.clock {
-                            ui.label(
-                                RichText::new(format_duration(clock.elapsed(Instant::now())))
-                                    .size(13.0)
-                                    .strong()
-                                    .color(colors.ink),
-                            );
-                        }
-                    });
-                } else if self.error {
-                    ui.colored_label(colors.error, lang.message(&self.status));
-                }
-                ui.add_space(5.0);
-                let wave_height = ui.available_height().clamp(30.0, 75.0);
-                self.waveform(ui, wave_height);
-            });
+            .show(root_ui, |ui| self.main_content(ui));
         self.bubble_overlay(&ctx);
         self.settings_panel(&ctx);
         self.log_panel(&ctx);
     }
-}
-
-pub(super) fn voice_symbol(provider: Provider, voice: &str) -> &'static str {
-    let feminine = match provider {
-        Provider::Gemini => matches!(
-            voice,
-            "Achernar"
-                | "Aoede"
-                | "Autonoe"
-                | "Callirrhoe"
-                | "Despina"
-                | "Erinome"
-                | "Gacrux"
-                | "Kore"
-                | "Laomedeia"
-                | "Leda"
-                | "Pulcherrima"
-                | "Sulafat"
-                | "Vindemiatrix"
-                | "Zephyr"
-        ),
-        Provider::OpenAi => matches!(voice, "alloy" | "coral" | "sage" | "shimmer" | "marin"),
-    };
-    if feminine {
-        "♀"
-    } else {
-        "♂"
-    }
-}
-
-pub(super) fn voice_description<'a>(language: UiLanguage, description: &'a str) -> &'a str {
-    if description == "Clear" && language != UiLanguage::English {
-        language.text("Clear voice")
-    } else {
-        language.text(description)
-    }
-}
-
-pub(super) fn is_modifier_key(key: egui::Key) -> bool {
-    matches!(
-        key,
-        egui::Key::ControlLeft
-            | egui::Key::ControlRight
-            | egui::Key::ShiftLeft
-            | egui::Key::ShiftRight
-            | egui::Key::AltLeft
-            | egui::Key::AltRight
-            | egui::Key::SuperLeft
-            | egui::Key::SuperRight
-    )
-}
-
-pub(super) fn chat_title(chat: &ChatRecord, language: UiLanguage) -> &str {
-    if !chat.title_is_custom
-        && chat.title == "New conversation"
-        && !chat.sessions.iter().any(|s| {
-            s.messages
-                .iter()
-                .any(|m| m.speaker == Speaker::User && !m.text.trim().is_empty())
-        })
-    {
-        language.text("New conversation")
-    } else {
-        &chat.title
-    }
-}
-
-pub(super) fn age_label(timestamp: u64, language: UiLanguage) -> String {
-    let seconds = history::timestamp().saturating_sub(timestamp);
-    if seconds < 60 {
-        language.text("Just now").into()
-    } else if seconds < 3600 {
-        language.format("{0} min ago", &(seconds / 60).to_string())
-    } else if seconds < 86_400 {
-        language.format("{0} h ago", &(seconds / 3600).to_string())
-    } else if seconds < 172_800 {
-        language.text("1 day ago").into()
-    } else {
-        language.format("{0} d ago", &(seconds / 86_400).to_string())
-    }
-}
-
-pub(super) fn pace_label(speed: f32) -> &'static str {
-    if speed < 0.785 {
-        "Very slow"
-    } else if speed < 0.96 {
-        "A little slower"
-    } else if speed < 1.08 {
-        "Natural"
-    } else if speed < 1.23 {
-        "A little faster"
-    } else {
-        "Fast"
-    }
-}
-
-fn wave_envelope(position: f32) -> f32 {
-    (std::f32::consts::PI * position).sin().max(0.0).powf(0.9)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{is_modifier_key, wave_envelope};
-    use eframe::egui;
-
-    #[test]
-    fn waveform_envelope_is_finite_at_all_drawn_points() {
-        for point in 0..=72 {
-            let value = wave_envelope(point as f32 / 72.0);
-            assert!(value.is_finite() && value >= 0.0);
-        }
-    }
-
-    #[test]
-    fn shortcut_capture_waits_for_the_non_modifier_key() {
-        assert!(is_modifier_key(egui::Key::ControlLeft));
-        assert!(is_modifier_key(egui::Key::ShiftRight));
-        assert!(!is_modifier_key(egui::Key::K));
-        assert!(!is_modifier_key(egui::Key::Space));
-    }
-}
-
-fn paint_bubbles(
-    ui: &egui::Ui,
-    rect: Rect,
-    transcript: &Transcript,
-    seconds: f32,
-    now: Instant,
-    theme: Theme,
-    language: UiLanguage,
-) {
-    let painter = ui.painter_at(rect);
-    let mut y = rect.bottom() - 4.0;
-    for line in transcript
-        .lines
-        .iter()
-        .rev()
-        .filter(|l| !l.historical && now.duration_since(l.updated).as_secs_f32() < seconds)
-        .take(4)
-    {
-        let age = now.duration_since(line.updated).as_secs_f32();
-        let fade_start = seconds * 0.7;
-        let opacity = if age < fade_start {
-            1.0
-        } else {
-            ((seconds - age) / (seconds - fade_start)).clamp(0.0, 1.0)
-        };
-        let alpha = (opacity * 255.0) as u8;
-        let text_color = if theme == Theme::Dark {
-            Color32::from_rgba_unmultiplied(232, 240, 250, alpha)
-        } else {
-            Color32::from_rgba_unmultiplied(24, 42, 64, alpha)
-        };
-        let galley = painter.layout(
-            line.text.trim().to_owned(),
-            FontId::proportional(13.0),
-            text_color,
-            (rect.width() - 55.0).max(80.0),
-        );
-        let height = galley.size().y + 33.0;
-        y -= height + 8.0;
-        if y < rect.top() {
-            break;
-        }
-        let lift = (age / seconds).clamp(0.0, 1.0) * 10.0;
-        let bubble = Rect::from_min_size(
-            Pos2::new(rect.left() + 8.0, y - lift),
-            Vec2::new(rect.width() - 16.0, height),
-        );
-        let fill = if theme == Theme::Dark && line.speaker == Speaker::User {
-            Color32::from_rgba_unmultiplied(35, 57, 88, alpha)
-        } else if theme == Theme::Dark {
-            Color32::from_rgba_unmultiplied(39, 47, 62, alpha)
-        } else if line.speaker == Speaker::User {
-            Color32::from_rgba_unmultiplied(231, 240, 254, alpha)
-        } else {
-            Color32::from_rgba_unmultiplied(252, 253, 255, alpha)
-        };
-        painter.rect_filled(bubble, 12.0, fill);
-        painter.rect_stroke(
-            bubble,
-            12.0,
-            Stroke::new(
-                1.0_f32,
-                if theme == Theme::Dark {
-                    Color32::from_rgba_unmultiplied(94, 116, 145, alpha)
-                } else {
-                    Color32::from_rgba_unmultiplied(176, 198, 224, alpha)
-                },
-            ),
-            StrokeKind::Inside,
-        );
-        painter.text(
-            bubble.left_top() + Vec2::new(12.0, 7.0),
-            egui::Align2::LEFT_TOP,
-            transcript.speaker_name(line, language),
-            FontId::proportional(11.0),
-            if theme == Theme::Dark {
-                Color32::from_rgba_unmultiplied(156, 193, 255, alpha)
-            } else {
-                Color32::from_rgba_unmultiplied(42, 95, 171, alpha)
-            },
-        );
-        painter.galley(
-            bubble.left_top() + Vec2::new(12.0, 23.0),
-            galley,
-            text_color,
-        );
-    }
-}
-
-#[derive(Clone, Copy)]
-enum Icon {
-    Settings,
-    Log,
-    Eye,
-    Mic,
-}
-fn icon_button(
-    ui: &mut egui::Ui,
-    icon: Icon,
-    active: bool,
-    language: UiLanguage,
-) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(Vec2::splat(36.0), Sense::click());
-    let label = match icon {
-        Icon::Settings => "Settings",
-        Icon::Log => "Conversation log",
-        Icon::Eye => "Toggle conversation text",
-        Icon::Mic => "Toggle microphone",
-    };
-    response.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::WidgetType::Button, true, language.text(label))
-    });
-    let painter = ui.painter();
-    let dark = ui.visuals().dark_mode;
-    let fill = if active {
-        BLUE
-    } else if dark && response.hovered() {
-        Color32::from_rgb(52, 72, 99)
-    } else if dark {
-        Color32::from_rgb(37, 49, 66)
-    } else if response.hovered() {
-        Color32::from_rgb(223, 234, 249)
-    } else {
-        Color32::from_rgb(241, 246, 252)
-    };
-    painter.rect_filled(rect, 10.0, fill);
-    let color = if active {
-        Color32::WHITE
-    } else if dark {
-        Color32::from_rgb(179, 201, 232)
-    } else {
-        Color32::from_rgb(55, 91, 139)
-    };
-    let stroke = Stroke::new(1.6_f32, color);
-    let c = rect.center();
-    let p = |x, y| Pos2::new(c.x + x, c.y + y);
-    match icon {
-        Icon::Settings => {
-            for y in [-6.0, 0.0, 6.0] {
-                painter.line_segment([p(-8.0, y), p(8.0, y)], stroke);
-            }
-            for (x, y) in [(-3.0, -6.0), (4.0, 0.0), (-1.0, 6.0)] {
-                painter.circle_filled(p(x, y), 2.4, fill);
-                painter.circle_stroke(p(x, y), 2.4, stroke);
-            }
-        }
-        Icon::Log => {
-            for y in [-6.0, 0.0, 6.0] {
-                painter.line_segment([p(-7.0, y), p(7.0, y)], stroke);
-            }
-        }
-        Icon::Eye => {
-            painter.circle_stroke(c, 7.0, stroke);
-            painter.circle_filled(c, 2.0, color);
-        }
-        Icon::Mic => {
-            painter.rect_stroke(
-                Rect::from_center_size(p(0.0, -3.0), Vec2::new(7.0, 12.0)),
-                3.5,
-                stroke,
-                StrokeKind::Inside,
-            );
-            painter.line_segment([p(-8.0, 2.0), p(-6.0, 6.0)], stroke);
-            painter.line_segment([p(-6.0, 6.0), p(0.0, 8.0)], stroke);
-            painter.line_segment([p(0.0, 8.0), p(6.0, 6.0)], stroke);
-            painter.line_segment([p(6.0, 6.0), p(8.0, 2.0)], stroke);
-            painter.line_segment([p(0.0, 8.0), p(0.0, 11.0)], stroke);
-        }
-    }
-    response
 }

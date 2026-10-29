@@ -1,4 +1,40 @@
 use crate::config::Provider;
+use std::time::Duration;
+
+const RETRY_DELAYS_MS: [u64; 5] = [2, 5, 10, 20, 40];
+
+fn retry_read(
+    mut read: impl FnMut() -> Result<Option<String>, String>,
+    accept: impl Fn(&str) -> bool,
+    mut wait: impl FnMut(Duration),
+) -> Result<Option<String>, String> {
+    for attempt in 0..=RETRY_DELAYS_MS.len() {
+        if attempt > 0 {
+            wait(Duration::from_millis(RETRY_DELAYS_MS[attempt - 1]));
+        }
+        if let Some(value) = read()? {
+            if accept(&value) {
+                return Ok(Some(value));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn retry_delete(
+    mut delete: impl FnMut() -> Result<bool, String>,
+    mut wait: impl FnMut(Duration),
+) -> Result<(), String> {
+    for attempt in 0..=RETRY_DELAYS_MS.len() {
+        if attempt > 0 {
+            wait(Duration::from_millis(RETRY_DELAYS_MS[attempt - 1]));
+        }
+        if delete()? {
+            return Ok(());
+        }
+    }
+    Ok(())
+}
 
 #[derive(Clone)]
 pub struct Store {
@@ -32,17 +68,28 @@ impl Store {
     }
 
     pub fn load(&self, provider: Provider) -> Result<Option<String>, String> {
-        platform::read(self.target(provider))
+        retry_read(
+            || platform::read(self.target(provider)),
+            |_| true,
+            std::thread::sleep,
+        )
     }
     pub fn save(&self, provider: Provider, key: &str) -> Result<(), String> {
         platform::write(self.target(provider), key)?;
-        match self.load(provider)? {
-            Some(saved) if saved == key.trim() => Ok(()),
-            _ => Err("Could not verify saved API key.".into()),
+        match retry_read(
+            || platform::read(self.target(provider)),
+            |saved| saved == key.trim(),
+            std::thread::sleep,
+        )? {
+            Some(_) => Ok(()),
+            None => Err("Could not verify saved API key.".into()),
         }
     }
     pub fn forget(&self, provider: Provider) -> Result<(), String> {
-        platform::delete(self.target(provider))
+        retry_delete(
+            || platform::delete(self.target(provider)),
+            std::thread::sleep,
+        )
     }
 }
 
@@ -116,10 +163,12 @@ mod platform {
             Ok(())
         }
     }
-    pub fn delete(name: &str) -> Result<(), String> {
+    pub fn delete(name: &str) -> Result<bool, String> {
         let name = wide(name);
-        if unsafe { CredDeleteW(name.as_ptr(), CRED_TYPE_GENERIC, 0) } != 0 || not_found() {
-            Ok(())
+        if unsafe { CredDeleteW(name.as_ptr(), CRED_TYPE_GENERIC, 0) } != 0 {
+            Ok(true)
+        } else if not_found() {
+            Ok(false)
         } else {
             Err(failed("Could not remove saved API key"))
         }
@@ -204,6 +253,86 @@ mod platform {
             assert!(read.success());
             cleanup.unwrap();
         }
+
+        #[test]
+        fn parallel_synthetic_credentials_are_immediately_retrievable() {
+            let namespace = format!(
+                "Speeching/test/concurrent/{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+            let threads: Vec<_> = (0..8)
+                .map(|thread| {
+                    let namespace = namespace.clone();
+                    let barrier = barrier.clone();
+                    std::thread::spawn(move || {
+                        barrier.wait();
+                        let mut errors = Vec::new();
+                        for index in 0..20 {
+                            let store = crate::credentials::Store::isolated(&format!(
+                                "{namespace}/{thread}/{index}"
+                            ));
+                            let result = store
+                                .save(crate::config::Provider::Gemini, "synthetic-concurrent-key");
+                            let later = store.load(crate::config::Provider::Gemini);
+                            let cleanup = store.forget(crate::config::Provider::Gemini);
+                            if result.is_err() || !matches!(later, Ok(Some(_))) || cleanup.is_err()
+                            {
+                                errors.push(format!(
+                                    "save={:?}, later={:?}, cleanup={:?}",
+                                    result.err(),
+                                    later.map(|value| value.is_some()),
+                                    cleanup.err()
+                                ));
+                            }
+                        }
+                        errors
+                    })
+                })
+                .collect();
+            let errors: Vec<_> = threads
+                .into_iter()
+                .flat_map(|thread| thread.join().unwrap())
+                .collect();
+            assert!(errors.is_empty(), "{errors:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod retry_tests {
+    use super::*;
+
+    #[test]
+    fn retries_missing_and_stale_readback_before_accepting_a_value() {
+        let mut values = [None, Some("old".to_owned()), Some("new".to_owned())].into_iter();
+        let mut waits = Vec::new();
+        let found = retry_read(
+            || Ok(values.next().unwrap()),
+            |value| value == "new",
+            |delay| waits.push(delay),
+        )
+        .unwrap();
+        assert_eq!(found.as_deref(), Some("new"));
+        assert_eq!(waits, [Duration::from_millis(2), Duration::from_millis(5)]);
+    }
+
+    #[test]
+    fn retries_a_missing_deletion_and_propagates_read_errors() {
+        let mut deletes = [false, false, true].into_iter();
+        let mut waits = Vec::new();
+        retry_delete(|| Ok(deletes.next().unwrap()), |delay| waits.push(delay)).unwrap();
+        assert_eq!(waits.len(), 2);
+        let error = retry_read(
+            || Err("blocked".into()),
+            |_| true,
+            |_| panic!("must not retry errors"),
+        );
+        assert_eq!(error.unwrap_err(), "blocked");
     }
 }
 
@@ -215,7 +344,7 @@ mod platform {
     pub fn write(_: &str, _: &str) -> Result<(), String> {
         Err("Secure API key storage requires Windows Credential Manager.".into())
     }
-    pub fn delete(_: &str) -> Result<(), String> {
+    pub fn delete(_: &str) -> Result<bool, String> {
         Err("Secure API key storage requires Windows Credential Manager.".into())
     }
 }
