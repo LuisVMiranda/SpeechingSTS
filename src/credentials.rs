@@ -1,20 +1,49 @@
 use crate::config::Provider;
 
-fn target(provider: Provider) -> &'static str {
-    match provider {
-        Provider::Gemini => "Speeching/Gemini",
-        Provider::OpenAi => "Speeching/OpenAI",
+#[derive(Clone)]
+pub struct Store {
+    gemini: String,
+    openai: String,
+}
+
+impl Default for Store {
+    fn default() -> Self {
+        Self {
+            gemini: "Speeching/Gemini".into(),
+            openai: "Speeching/OpenAI".into(),
+        }
     }
 }
 
-pub fn load(provider: Provider) -> Result<Option<String>, String> {
-    platform::read(target(provider))
-}
-pub fn save(provider: Provider, key: &str) -> Result<(), String> {
-    platform::write(target(provider), key)
-}
-pub fn forget(provider: Provider) -> Result<(), String> {
-    platform::delete(target(provider))
+impl Store {
+    #[cfg(test)]
+    pub fn isolated(namespace: &str) -> Self {
+        Self {
+            gemini: format!("{namespace}/Gemini"),
+            openai: format!("{namespace}/OpenAI"),
+        }
+    }
+
+    fn target(&self, provider: Provider) -> &str {
+        match provider {
+            Provider::Gemini => &self.gemini,
+            Provider::OpenAi => &self.openai,
+        }
+    }
+
+    pub fn load(&self, provider: Provider) -> Result<Option<String>, String> {
+        platform::read(self.target(provider))
+    }
+    pub fn save(&self, provider: Provider, key: &str) -> Result<(), String> {
+        platform::write(self.target(provider), key)?;
+        match self.load(provider)? {
+            Some(saved) if saved == key.trim() => Ok(()),
+            _ => Err("Could not verify saved API key.".into()),
+        }
+    }
+    pub fn forget(&self, provider: Provider) -> Result<(), String> {
+        platform::delete(self.target(provider))
+    }
 }
 
 #[cfg(windows)]
@@ -111,12 +140,69 @@ mod platform {
             );
             assert_eq!(read(&name).unwrap(), None);
             write(&name, "example-key-for-testing").unwrap();
+            let mut entry: *mut CREDENTIALW = ptr::null_mut();
+            let wide_name = wide(&name);
+            assert_ne!(
+                unsafe { CredReadW(wide_name.as_ptr(), CRED_TYPE_GENERIC, 0, &mut entry) },
+                0
+            );
+            let persistence = unsafe { (*entry).Persist };
+            unsafe { CredFree(entry.cast::<c_void>()) };
             assert_eq!(
                 read(&name).unwrap().as_deref(),
                 Some("example-key-for-testing")
             );
             delete(&name).unwrap();
+            assert_eq!(persistence, CRED_PERSIST_LOCAL_MACHINE);
             assert_eq!(read(&name).unwrap(), None);
+        }
+
+        #[test]
+        fn credential_survives_separate_processes() {
+            const PHASE: &str = "SPEECHING_CREDENTIAL_TEST_PHASE";
+            const NAMESPACE: &str = "SPEECHING_CREDENTIAL_TEST_NAMESPACE";
+            const KEY: &str = "synthetic-process-restart-key";
+            if let Ok(phase) = std::env::var(PHASE) {
+                let store = crate::credentials::Store::isolated(&std::env::var(NAMESPACE).unwrap());
+                match phase.as_str() {
+                    "write" => store.save(crate::config::Provider::Gemini, KEY).unwrap(),
+                    "read" => assert_eq!(
+                        store
+                            .load(crate::config::Provider::Gemini)
+                            .unwrap()
+                            .as_deref(),
+                        Some(KEY)
+                    ),
+                    _ => panic!("Unknown test phase"),
+                }
+                return;
+            }
+            let namespace = format!(
+                "Speeching/test/process-restart/{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let store = crate::credentials::Store::isolated(&namespace);
+            let run = |phase| {
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--exact",
+                        "credentials::platform::tests::credential_survives_separate_processes",
+                    ])
+                    .env(PHASE, phase)
+                    .env(NAMESPACE, &namespace)
+                    .status()
+                    .unwrap()
+            };
+            let write = run("write");
+            let read = run("read");
+            let cleanup = store.forget(crate::config::Provider::Gemini);
+            assert!(write.success());
+            assert!(read.success());
+            cleanup.unwrap();
         }
     }
 }

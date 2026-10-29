@@ -8,7 +8,7 @@ Speeching is a small native Windows app for spoken language practice. The Rust a
 2. Open **Settings** using the sliders icon. In **Provider**, choose a provider and paste its API key. In **Practice**, choose your language, level and voice, then save.
 3. Press the large microphone to start or end a conversation. While connected, the small microphone in the top bar mutes or unmutes you. Headphones are recommended; the native app does not provide acoustic echo cancellation.
 
-The app stores API keys for the current Windows user in Windows Credential Manager, separate from the project and settings file. Saved keys are not shown in the app; use **Remove saved key** or enter a replacement in **Provider**. Other preferences are saved in `%APPDATA%\Speeching\settings.json`. Audio and transcripts are processed by the provider you select; the model does not run locally.
+The app saves each provider's API key in Windows Credential Manager for the current Windows user, separate from the project and settings file. A pasted key is saved automatically; typed keys are saved when you leave the field, choose **Save key**, close settings, or exit the app. The app verifies that Windows can read the saved key and reports an error if it cannot be saved. Once saved, the key is never displayed; use **Replace key** or **Remove saved key** in **Provider** to manage it. Existing keys saved by previous versions remain available. Windows protects saved credentials at rest, but software running as the same user or with sufficient system privileges may be able to retrieve them. Other preferences are saved in `%APPDATA%\Speeching\settings.json`. Audio and transcripts are processed by the provider you select; the model does not run locally.
 
 ## Conversation and controls
 

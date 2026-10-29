@@ -329,10 +329,12 @@ impl Transcript {
 
 pub struct App {
     settings: Settings,
+    credential_store: credentials::Store,
     gemini_key: String,
     openai_key: String,
     gemini_key_saved: bool,
     openai_key_saved: bool,
+    editing_key: Option<Provider>,
     key_feedback: String,
     session: Option<Session>,
     receiver: Option<Receiver<Event>>,
@@ -387,25 +389,36 @@ enum SettingsSection {
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let settings = Settings::load();
+        Self::with_settings_and_store(cc, settings, credentials::Store::default())
+    }
+    fn with_settings_and_store(
+        cc: &eframe::CreationContext<'_>,
+        settings: Settings,
+        credential_store: credentials::Store,
+    ) -> Self {
         let language_input = settings.ui_language.text(&settings.language).to_owned();
         let applied_theme = settings.theme;
         apply_theme(&cc.egui_ctx, applied_theme);
-        let gemini = credentials::load(Provider::Gemini);
-        let openai = credentials::load(Provider::OpenAi);
+        let gemini = credential_store.load(Provider::Gemini);
+        let openai = credential_store.load(Provider::OpenAi);
         let key_feedback = gemini
             .as_ref()
             .err()
             .or_else(|| openai.as_ref().err())
             .cloned()
             .unwrap_or_default();
-        let gemini_key_saved = gemini.is_ok_and(|key| key.is_some());
-        let openai_key_saved = openai.is_ok_and(|key| key.is_some());
+        let gemini_key_saved =
+            gemini.is_ok_and(|key| key.is_some_and(|key| !key.trim().is_empty()));
+        let openai_key_saved =
+            openai.is_ok_and(|key| key.is_some_and(|key| !key.trim().is_empty()));
         Self {
             settings,
+            credential_store,
             gemini_key: String::new(),
             openai_key: String::new(),
             gemini_key_saved,
             openai_key_saved,
+            editing_key: None,
             key_feedback,
             session: None,
             receiver: None,
@@ -461,15 +474,10 @@ impl App {
         self.settings.language = language.to_owned();
         self.active_input_mode = self.settings.input_mode;
         self.active_shortcut = self.settings.push_to_talk_shortcut.clone();
-        if let Err(error) = self.save_pending_keys() {
-            self.key_feedback = error.clone();
-            self.status = error;
-            self.error = true;
-            self.settings_open = true;
-            self.settings_section = SettingsSection::Provider;
+        if !self.persist_pending_keys() {
             return;
         }
-        let key = match credentials::load(self.settings.provider) {
+        let key = match self.credential_store.load(self.settings.provider) {
             Ok(Some(key)) => key,
             Ok(None) => String::new(),
             Err(error) => {
@@ -704,19 +712,35 @@ impl App {
                 Provider::OpenAi => &mut self.openai_key,
             };
             if !draft.trim().is_empty() {
-                credentials::save(provider, draft)?;
+                self.credential_store.save(provider, draft)?;
                 draft.clear();
                 match provider {
                     Provider::Gemini => self.gemini_key_saved = true,
                     Provider::OpenAi => self.openai_key_saved = true,
+                }
+                if self.editing_key == Some(provider) {
+                    self.editing_key = None;
                 }
             }
         }
         self.key_feedback.clear();
         Ok(())
     }
+    fn persist_pending_keys(&mut self) -> bool {
+        match self.save_pending_keys() {
+            Ok(()) => true,
+            Err(error) => {
+                self.key_feedback = error.clone();
+                self.status = error;
+                self.error = true;
+                self.settings_open = true;
+                self.settings_section = SettingsSection::Provider;
+                false
+            }
+        }
+    }
     fn forget_key(&mut self, provider: Provider) {
-        match credentials::forget(provider) {
+        match self.credential_store.forget(provider) {
             Ok(()) => {
                 match provider {
                     Provider::Gemini => {
@@ -728,10 +752,21 @@ impl App {
                         self.openai_key.clear();
                     }
                 }
+                if self.editing_key == Some(provider) {
+                    self.editing_key = None;
+                }
                 self.key_feedback = "Saved API key removed.".into();
             }
             Err(error) => self.key_feedback = error,
         }
+    }
+    fn close_settings(&mut self) {
+        if !self.persist_pending_keys() {
+            return;
+        }
+        self.settings_open = false;
+        self.shortcut_capture = false;
+        self.save_positions();
     }
     fn rename_chat(&mut self) {
         if self.session.is_some() || !self.flush_history() {
@@ -827,6 +862,129 @@ mod settings;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    fn request_exit(app: &mut App, ctx: &egui::Context) -> egui::FullOutput {
+        let mut input = egui::RawInput::default();
+        input
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default()
+            .events
+            .push(egui::ViewportEvent::Close);
+        let mut frame = eframe::Frame::_new_kittest();
+        ctx.run_ui(input, |ui| eframe::App::logic(app, ui.ctx(), &mut frame))
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn exiting_app_saves_a_pending_key_or_cancels_exit_on_failure() {
+        let namespace = format!(
+            "Speeching/test/app-exit/{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let store = credentials::Store::isolated(&namespace);
+        let context = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = App::with_settings_and_store(&context, Settings::default(), store.clone());
+        app.gemini_key = "synthetic-exit-key".into();
+
+        let mut success = request_exit(&mut app, &context.egui_ctx);
+        let saved_key = store.load(Provider::Gemini);
+        app.gemini_key = "x".repeat(2561);
+        let mut failure = request_exit(&mut app, &context.egui_ctx);
+        let retained_key = store.load(Provider::Gemini);
+        store.forget(Provider::Gemini).unwrap();
+
+        let cancelled = |output: &egui::FullOutput| {
+            output.viewport_output[&egui::ViewportId::ROOT]
+                .commands
+                .contains(&egui::ViewportCommand::CancelClose)
+        };
+        let success_cancelled = cancelled(&success);
+        let failure_cancelled = cancelled(&failure);
+        success.textures_delta.clear();
+        failure.textures_delta.clear();
+        assert!(!success_cancelled);
+        assert!(failure_cancelled);
+        assert_eq!(saved_key.unwrap().as_deref(), Some("synthetic-exit-key"));
+        assert_eq!(retained_key.unwrap().as_deref(), Some("synthetic-exit-key"));
+        assert_eq!(app.gemini_key.len(), 2561);
+        assert!(app.settings_open);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn closing_settings_saves_pending_keys_for_both_providers() {
+        let namespace = format!(
+            "Speeching/test/settings-close/{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let store = credentials::Store::isolated(&namespace);
+        let context = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = App::with_settings_and_store(&context, Settings::default(), store.clone());
+        app.settings_open = true;
+        app.gemini_key = "synthetic-gemini-key".into();
+        app.openai_key = "synthetic-openai-key".into();
+
+        app.close_settings();
+        let gemini = store.load(Provider::Gemini);
+        let openai = store.load(Provider::OpenAi);
+        let mut restart_settings = Settings::default();
+        restart_settings.gemini_model.clear();
+        let mut restarted = App::with_settings_and_store(&context, restart_settings, store.clone());
+        let saved_flags = (restarted.gemini_key_saved, restarted.openai_key_saved);
+        let drafts_empty = (
+            restarted.gemini_key.is_empty(),
+            restarted.openai_key.is_empty(),
+        );
+        restarted.start();
+        let start_status = restarted.status.clone();
+        store.forget(Provider::Gemini).unwrap();
+        store.forget(Provider::OpenAi).unwrap();
+
+        assert_eq!(saved_flags, (true, true));
+        assert_eq!(drafts_empty, (true, true));
+        assert_eq!(
+            start_status,
+            "Choose a language, model, and voice in settings."
+        );
+        assert_eq!(gemini.unwrap().as_deref(), Some("synthetic-gemini-key"));
+        assert_eq!(openai.unwrap().as_deref(), Some("synthetic-openai-key"));
+        assert!(!app.settings_open);
+    }
+    #[cfg(windows)]
+    #[test]
+    fn failed_key_save_keeps_settings_and_draft_open() {
+        let namespace = format!("Speeching/test/save-failure/{}", std::process::id());
+        let store = credentials::Store::isolated(&namespace);
+        store
+            .save(Provider::Gemini, "synthetic-original-key")
+            .unwrap();
+        let context = eframe::CreationContext::_new_kittest(egui::Context::default());
+        let mut app = App::with_settings_and_store(&context, Settings::default(), store.clone());
+        app.settings_open = true;
+        app.gemini_key = "x".repeat(2561);
+
+        app.close_settings();
+        let existing_key = store.load(Provider::Gemini);
+        store.forget(Provider::Gemini).unwrap();
+
+        assert!(app.settings_open);
+        assert_eq!(
+            existing_key.unwrap().as_deref(),
+            Some("synthetic-original-key")
+        );
+        assert_eq!(app.gemini_key.len(), 2561);
+        assert_eq!(app.key_feedback, "API key is too long to save.");
+        assert_eq!(app.settings_section, SettingsSection::Provider);
+    }
     #[test]
     fn speaking_indicator_holds_through_brief_pauses() {
         let start = Instant::now();

@@ -60,6 +60,11 @@ impl App {
                         }
                     });
                     if self.settings_section != previous_section {
+                        if previous_section == SettingsSection::Provider
+                            && !self.persist_pending_keys()
+                        {
+                            self.settings_section = SettingsSection::Provider;
+                        }
                         if self.settings_section != SettingsSection::Microphone {
                             self.shortcut_capture = false;
                         }
@@ -179,9 +184,7 @@ impl App {
             }
         }
         if close {
-            self.settings_open = false;
-            self.shortcut_capture = false;
-            self.save_positions();
+            self.close_settings();
         }
     }
 
@@ -366,6 +369,7 @@ impl App {
         let lang = self.settings.ui_language;
         let colors = palette(self.settings.theme);
         ui.label(RichText::new(lang.text("Provider")).size(16.0).strong());
+        let previous_provider = self.settings.provider;
         ui.horizontal_wrapped(|ui| {
             ui.selectable_value(&mut self.settings.provider, Provider::Gemini, "Gemini Live");
             ui.selectable_value(
@@ -374,6 +378,9 @@ impl App {
                 "OpenAI Realtime",
             );
         });
+        if self.settings.provider != previous_provider && !self.persist_pending_keys() {
+            self.settings.provider = previous_provider;
+        }
         ui.add_space(12.0);
         let provider = self.settings.provider;
         let saved = match provider {
@@ -381,34 +388,62 @@ impl App {
             Provider::OpenAi => self.openai_key_saved,
         };
         ui.label(RichText::new(lang.text("API key")).strong());
-        let draft = match provider {
-            Provider::Gemini => &mut self.gemini_key,
-            Provider::OpenAi => &mut self.openai_key,
-        };
-        ui.add(
-            egui::TextEdit::singleline(draft)
-                .password(true)
-                .hint_text(lang.text(if saved {
-                    "Enter a new key to replace the saved key"
-                } else {
-                    "Paste an API key"
-                }))
-                .desired_width(f32::INFINITY),
-        );
-        ui.horizontal_wrapped(|ui| {
+        if saved && self.editing_key != Some(provider) {
             ui.label(
-                RichText::new(lang.text(if saved {
-                    "Saved securely in Windows Credential Manager."
-                } else {
-                    "Saved securely when you save settings."
-                }))
-                .size(12.0)
-                .color(colors.muted),
+                RichText::new(lang.text("Saved securely in Windows Credential Manager."))
+                    .size(12.0)
+                    .color(colors.muted),
             );
-            if saved && ui.small_button(lang.text("Remove saved key")).clicked() {
-                self.forget_key(provider);
+            ui.horizontal_wrapped(|ui| {
+                if ui.small_button(lang.text("Replace key")).clicked() {
+                    self.editing_key = Some(provider);
+                }
+                if ui.small_button(lang.text("Remove saved key")).clicked() {
+                    self.forget_key(provider);
+                }
+            });
+        } else {
+            let draft = match provider {
+                Provider::Gemini => &mut self.gemini_key,
+                Provider::OpenAi => &mut self.openai_key,
+            };
+            let response = ui.add(
+                egui::TextEdit::singleline(draft)
+                    .password(true)
+                    .hint_text(lang.text("Paste an API key"))
+                    .desired_width(f32::INFINITY),
+            );
+            let has_draft = !draft.trim().is_empty();
+            let pasted = response.changed()
+                && ui.input(|input| {
+                    input
+                        .events
+                        .iter()
+                        .any(|event| matches!(event, egui::Event::Paste(_)))
+                });
+            ui.label(
+                RichText::new(lang.text("Saved automatically when you paste or leave this field."))
+                    .size(12.0)
+                    .color(colors.muted),
+            );
+            let mut save_key = false;
+            let mut cancel = false;
+            ui.horizontal_wrapped(|ui| {
+                save_key = ui
+                    .add_enabled(has_draft, egui::Button::new(lang.text("Save key")))
+                    .clicked();
+                if saved {
+                    cancel = ui.small_button(lang.text("Cancel")).clicked();
+                }
+            });
+            if cancel {
+                draft.clear();
+                self.editing_key = None;
+                self.key_feedback.clear();
+            } else if has_draft && (pasted || response.lost_focus() || save_key) {
+                self.persist_pending_keys();
             }
-        });
+        }
         ui.add_space(12.0);
         let (url, model) = match provider {
             Provider::Gemini => (

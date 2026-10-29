@@ -27,9 +27,10 @@ impl App {
                     }))
                     .clicked()
                 {
-                    self.settings_open = !self.settings_open;
-                    if !self.settings_open {
-                        self.save_positions();
+                    if self.settings_open {
+                        self.close_settings();
+                    } else {
+                        self.settings_open = true;
                     }
                 }
                 if icon_button(ui, Icon::Log, self.log_open, lang)
@@ -373,6 +374,12 @@ impl App {
 }
 
 impl eframe::App for App {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if ctx.input(|input| input.viewport().close_requested()) && !self.persist_pending_keys() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+    }
+
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         [0.0, 0.0, 0.0, 0.0]
     }
