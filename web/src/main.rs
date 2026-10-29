@@ -8,6 +8,8 @@ mod live;
 #[cfg(test)]
 mod live_auth_tests;
 #[cfg(test)]
+mod live_tls_tests;
+#[cfg(test)]
 mod paging_tests;
 mod protocol;
 mod store;
@@ -94,6 +96,7 @@ fn add_user(input: &str) -> Result<(), String> {
 }
 
 async fn serve() -> Result<(), String> {
+    install_tls_provider()?;
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::new("speeching_web=info"))
         .init();
@@ -121,6 +124,12 @@ async fn serve() -> Result<(), String> {
     .with_graceful_shutdown(shutdown())
     .await
     .map_err(|e| e.to_string())
+}
+
+fn install_tls_provider() -> Result<(), String> {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| "Could not initialize the web service's TLS provider.".to_owned())
 }
 
 async fn shutdown() {
