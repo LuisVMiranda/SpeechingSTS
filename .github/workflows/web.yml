@@ -29,6 +29,9 @@ jobs:
         run: cargo clippy --locked --all-targets -- -D warnings
       - name: Build release
         run: cargo build --locked --release
+      - name: Test Windows launcher
+        if: matrix.os == 'windows-latest'
+        run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tests/launcher-smoke.ps1
       - uses: actions/setup-node@v4
         if: matrix.os == 'windows-latest'
         with:

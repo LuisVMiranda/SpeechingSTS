@@ -38,7 +38,8 @@ For Gemini, the default model is `gemini-3.8-live`. The app requests session res
 - **No sound or microphone:** check Windows' default input/output devices and microphone permissions. Try headphones to prevent speaker echo.
 - **Connection rejected:** check the selected protocol, WebSocket URL, model, API key, and provider quota or account access. Custom services must accept the same live-audio events as the selected adapter.
 - **Bubbles disappear:** this is intentional; open the conversation log for the complete session. Increase Bubble lifetime if needed.
-- **Old app:** `start-web.cmd` starts the complete original Node/browser version preserved in `legacy-web/`. The native version uses its own settings.
+- **Web version:** `start-web.cmd` starts the separate Rust web service and opens its practice window. It creates a protected master key and prompts for the first local account when needed. Its settings and conversations are separate from the native app; see [the web setup guide](web/README.md).
+- **Old app:** `legacy-web\start.cmd` starts the preserved original Node/browser version.
 
 ## Build from source
 

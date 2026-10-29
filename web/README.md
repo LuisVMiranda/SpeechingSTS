@@ -14,6 +14,12 @@ cargo build --locked --release
 
 The executable is `target/release/speeching-web` on Linux and macOS and `target\release\speeching-web.exe` on Windows. The repository's web CI is configured to build and test all three operating systems. The app's static assets are embedded in the executable.
 
+On Windows, double-click the root-folder `start-web.cmd` to start this Rust service and open a compact browser window. The launcher uses the current release, builds it if it is missing or older than the web source, and requires Rust and Windows build tools when a build is needed. Keep the launcher window open while using the app; press Ctrl+C or close it to stop the service. The first launch creates a master key with restricted Windows permissions and, in the default built-in authentication mode, asks you to create an account. Provider API keys are entered later in web settings and remain saved encrypted.
+
+The launcher normally stores its master key at `%USERPROFILE%\.config\speeching-web\master.key` and its data at `%LOCALAPPDATA%\SpeechingWeb`. If it finds one existing web database at the old default location in the project or `web` folder, it uses that database instead. If multiple databases exist, set `SPEECHING_WEB_DATA` to choose one. It respects `SPEECHING_MASTER_KEY_FILE`, `SPEECHING_MASTER_KEY`, and other service environment settings, and derives the local browser origin from a custom loopback listen port when needed. If a database exists but its master key is missing, it refuses to create a replacement; restore the original key.
+
+For account management, run `start-web.cmd user add USERNAME` from a terminal. This creates an account or resets that username's password. Pass `-NoOpen` to leave the browser closed, or `-NoBuild` to use the existing release without checking for source changes. Set `SPEECHING_WEB_BROWSER` to the full path of an Edge- or Chrome-compatible executable to choose a browser. The original Node prototype remains available through `legacy-web\start.cmd`.
+
 ## Set up a local account
 
 Each installation needs one persistent 32-byte master key. Generate it once, store it separately from the database, restrict who can read it, and back it up securely. Losing it makes saved provider keys unrecoverable. Changing it does not automatically re-encrypt existing keys.
@@ -116,6 +122,8 @@ cargo clippy --locked --all-targets -- -D warnings
 ```
 
 The test suite uses loopback mock providers and synthetic credentials; it does not need a real API key. A real provider conversation still requires a browser with microphone permission, a valid provider key, and an available compatible Live model.
+
+On Windows, `powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tests/launcher-smoke.ps1` checks the launcher using isolated data. It covers first-run key creation, access permissions, saved-key reuse, a missing-key failure, browser launch, port conflicts, and building or refreshing a release. Build the web release first.
 
 One Windows x86-64 release measurement was approximately 8.77 MiB working set and 2.18 MiB private memory while idle; the executable was approximately 6.05 MiB. This excludes the browser, reverse proxy, active calls, and operating-system cache. Memory use varies with platform, concurrent users, and workload.
 
