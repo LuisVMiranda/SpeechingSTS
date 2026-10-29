@@ -144,6 +144,11 @@ pub struct ChatStore {
     root: PathBuf,
 }
 impl ChatStore {
+    #[cfg(test)]
+    pub(crate) fn for_test(root: PathBuf) -> Self {
+        Self { root }
+    }
+
     pub fn beside_executable() -> Self {
         let root = std::env::current_exe()
             .ok()

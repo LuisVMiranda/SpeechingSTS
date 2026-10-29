@@ -63,7 +63,10 @@ pub struct App {
     library_query: String,
     library: Vec<ChatRecord>,
     library_search: LibrarySearch,
+    quick_chat_search: LibrarySearch,
     library_warning: String,
+    quick_chat_open: bool,
+    quick_chat_query: String,
     history_dirty: bool,
     history_last_saved: Instant,
     history_truncated: bool,
@@ -150,7 +153,10 @@ impl App {
             library_query: String::new(),
             library: Vec::new(),
             library_search: LibrarySearch::default(),
+            quick_chat_search: LibrarySearch::default(),
             library_warning: String::new(),
+            quick_chat_open: false,
+            quick_chat_query: String::new(),
             history_dirty: false,
             history_last_saved: Instant::now(),
             history_truncated: false,
@@ -317,6 +323,7 @@ impl App {
             Ok((records, skipped)) => {
                 self.library = records;
                 self.library_search.invalidate();
+                self.quick_chat_search.invalidate();
                 self.library_warning = if skipped == 0 {
                     String::new()
                 } else {
@@ -483,6 +490,7 @@ mod interface_helpers;
 mod library_search;
 mod log;
 mod partner_name;
+mod quick_chat;
 mod settings;
 mod settings_window;
 

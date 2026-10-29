@@ -10,13 +10,18 @@ impl App {
         let colors = palette(self.settings.theme);
         let lang = self.settings.ui_language;
         ui.horizontal(|ui| {
-            if !self.settings.minimal {
+            if self.session.is_none() {
+                self.quick_chat_button(ui);
+            } else if !self.settings.minimal {
                 ui.label(
                     RichText::new("speeching")
                         .strong()
                         .size(16.0)
                         .color(colors.ink),
                 );
+            }
+            if self.session.is_some() {
+                self.quick_chat_open = false;
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 self.settings_button(ui, lang);
