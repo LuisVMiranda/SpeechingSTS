@@ -55,8 +55,11 @@ function Start-TestLauncher([hashtable]$Settings) {
     $process.StartInfo = $info
     if (-not $process.Start()) { throw 'Could not start the test launcher.' }
     if ($Settings.ContainsKey('AuthChoice')) {
-        $process.StandardInput.WriteLine($Settings.AuthChoice)
-        $process.StandardInput.Close()
+        $inputStream = $process.StandardInput.BaseStream
+        $inputBytes = [Text.Encoding]::ASCII.GetBytes("$($Settings.AuthChoice)`r`n")
+        $inputStream.Write($inputBytes, 0, $inputBytes.Length)
+        $inputStream.Flush()
+        $inputStream.Dispose()
     }
     $children.Add([pscustomobject]@{ Process=$process; Port=$Settings.Port })
     return $process

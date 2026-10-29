@@ -199,7 +199,8 @@ function Initialize-Authentication {
         Write-Host 'Choose how people access Speeching web:'
         Write-Host '  1) Built-in login and separate accounts (recommended)'
         Write-Host '  2) No login (one shared guest; protect access externally)'
-        $choice = Read-Host 'Choice [1]'
+        $choice = [string](Read-Host 'Choice [1]')
+        $choice = $choice.Trim().Trim([char]0xFEFF).Trim()
         switch ($choice) {
             { $_ -eq '' -or $_ -eq '1' } { $env:SPEECHING_AUTH = 'builtin' }
             '2' { $env:SPEECHING_AUTH = 'off' }
