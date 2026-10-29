@@ -1,0 +1,66 @@
+const translations = {
+  en: {
+    welcome:'Welcome back', loginIntro:'Sign in to your private practice space.', username:'Username', password:'Password', signIn:'Sign in',
+    conversation:'Conversation', newConversation:'New conversation', currentConversation:'Current conversation', conversationDuration:'Conversation duration', practice:'Language practice', partner:'AI partner', you:'You',
+    ready:'Ready when you are', connecting:'Connecting…', listening:'Listening', speaking:'Speaking', startHint:'Tap the microphone to start',
+    stopHint:'Tap the microphone to end', holdTalk:'Hold to talk', holdHelp:'Hold with a pointer or keyboard, or activate to toggle the microphone.', liveTranscript:'Live transcript', hideText:'Hide text', showText:'Show text',
+    transcriptEmpty:'Your conversation will appear here as you speak.', history:'Conversations', historyIntro:'Pick up where you left off.',
+    search:'Search conversations', newest:'Newest first', oldest:'Oldest first', alphabetical:'Name A–Z', copy:'Copy', download:'Download',
+    rename:'Rename', delete:'Delete', settings:'Settings', settingsIntro:'Make the conversation yours.', practiceSetup:'Practice',
+    targetLanguage:'Practice language', level:'Level', beginner:'Beginner', intermediate:'Intermediate', advanced:'Advanced', pace:'Speaking pace',
+    verySlow:'Very slow', slower:'A little slower', natural:'Natural', faster:'Faster', inputMode:'Microphone', voiceActivation:'Voice activated',
+    pushToTalk:'Push to talk', shortcut:'Push-to-talk shortcut', shortcutHelp:'Focus this field and press a key combination. The shortcut works while this tab is active.', preferences:'Practice preferences', preferencesPlaceholder:'Optional topics or requests', preferencesNote:'Shared with the partner as a conversation request.', voiceProvider:'Voice & provider', provider:'Provider', voice:'Voice', apiKey:'Provider API key',
+    keyPlaceholder:'Enter a new key to save', keyNote:'Keys are encrypted on the server and never shown again.', appearance:'Appearance',
+    interfaceLanguage:'Interface language', theme:'Theme', light:'Light', dark:'Dark', openLogAutomatically:'Open the conversation log after a session', save:'Save settings', signOut:'Sign out',
+    keySaved:'A key is saved for this provider.', keyMissing:'No key saved for this provider.', saved:'Settings saved.',
+    noChats:'No saved conversations yet.', noResults:'No conversations match your search.', moreChats:'Load more conversations', moreMessages:'Load earlier messages', historyChanged:'History changed and was refreshed. Please try again.', renamePrompt:'New conversation name:',
+    deleteConfirm:'Delete this conversation permanently?', copied:'Conversation copied.', copyFailed:'Could not copy the conversation.', downloadFailed:'Could not download the conversation.',
+    missingKey:'Add an API key in settings first.', accessDenied:'Your authentication gateway did not provide a valid identity.',
+    micFailed:'Microphone access failed. Check your browser permissions and use HTTPS.', finished:'Conversation ended', start:'Start conversation', end:'End conversation', closeHistory:'Close conversations', closeSettings:'Close settings', sortConversations:'Sort conversations',
+  },
+  es: {
+    welcome:'Te damos la bienvenida', loginIntro:'Inicia sesión en tu espacio privado de práctica.', username:'Usuario', password:'Contraseña', signIn:'Iniciar sesión',
+    conversation:'Conversación', newConversation:'Nueva conversación', currentConversation:'Conversación actual', conversationDuration:'Duración de la conversación', practice:'Práctica de idiomas', partner:'Compañero de IA', you:'Tú',
+    ready:'Todo listo para empezar', connecting:'Conectando…', listening:'Escuchando', speaking:'Hablando', startHint:'Pulsa el micrófono para empezar',
+    stopHint:'Pulsa el micrófono para terminar', holdTalk:'Mantén pulsado para hablar', holdHelp:'Mantén pulsado con el puntero o teclado, o activa para alternar el micrófono.', liveTranscript:'Transcripción en vivo', hideText:'Ocultar texto', showText:'Mostrar texto',
+    transcriptEmpty:'La conversación aparecerá aquí mientras hablas.', history:'Conversaciones', historyIntro:'Retoma una conversación anterior.',
+    search:'Buscar conversaciones', newest:'Más recientes', oldest:'Más antiguas', alphabetical:'Nombre A–Z', copy:'Copiar', download:'Descargar',
+    rename:'Cambiar nombre', delete:'Eliminar', settings:'Ajustes', settingsIntro:'Personaliza la conversación.', practiceSetup:'Práctica',
+    targetLanguage:'Idioma de práctica', level:'Nivel', beginner:'Principiante', intermediate:'Intermedio', advanced:'Avanzado', pace:'Ritmo de voz',
+    verySlow:'Muy lento', slower:'Un poco más lento', natural:'Natural', faster:'Más rápido', inputMode:'Micrófono', voiceActivation:'Activación por voz',
+    pushToTalk:'Pulsar para hablar', shortcut:'Atajo para hablar', shortcutHelp:'Enfoca este campo y pulsa una combinación. Funciona con esta pestaña activa.', preferences:'Preferencias de práctica', preferencesPlaceholder:'Temas o solicitudes opcionales', preferencesNote:'Se comparten con el compañero como una petición de conversación.', voiceProvider:'Voz y proveedor', provider:'Proveedor', voice:'Voz', apiKey:'Clave API del proveedor',
+    keyPlaceholder:'Introduce una clave nueva', keyNote:'Las claves se cifran en el servidor y no se vuelven a mostrar.', appearance:'Apariencia',
+    interfaceLanguage:'Idioma de la interfaz', theme:'Tema', light:'Claro', dark:'Oscuro', openLogAutomatically:'Abrir el historial al terminar una sesión', save:'Guardar ajustes', signOut:'Cerrar sesión',
+    keySaved:'Hay una clave guardada para este proveedor.', keyMissing:'No hay clave guardada para este proveedor.', saved:'Ajustes guardados.',
+    noChats:'Aún no hay conversaciones guardadas.', noResults:'No se encontraron conversaciones.', moreChats:'Cargar más conversaciones', moreMessages:'Cargar mensajes anteriores', historyChanged:'El historial cambió y se actualizó. Inténtalo de nuevo.', renamePrompt:'Nuevo nombre de la conversación:',
+    deleteConfirm:'¿Eliminar esta conversación permanentemente?', copied:'Conversación copiada.', copyFailed:'No se pudo copiar la conversación.', downloadFailed:'No se pudo descargar la conversación.',
+    missingKey:'Añade una clave API en los ajustes.', accessDenied:'La pasarela de autenticación no proporcionó una identidad válida.',
+    micFailed:'No se pudo acceder al micrófono. Revisa los permisos y usa HTTPS.', finished:'Conversación terminada', start:'Iniciar conversación', end:'Terminar conversación', closeHistory:'Cerrar conversaciones', closeSettings:'Cerrar ajustes', sortConversations:'Ordenar conversaciones',
+  },
+  pt: {
+    welcome:'Boas-vindas de volta', loginIntro:'Entre no seu espaço privado de prática.', username:'Usuário', password:'Senha', signIn:'Entrar',
+    conversation:'Conversa', newConversation:'Nova conversa', currentConversation:'Conversa atual', conversationDuration:'Duração da conversa', practice:'Prática de idiomas', partner:'Parceiro de IA', you:'Você',
+    ready:'Tudo pronto para começar', connecting:'Conectando…', listening:'Ouvindo', speaking:'Falando', startHint:'Toque no microfone para começar',
+    stopHint:'Toque no microfone para encerrar', holdTalk:'Segure para falar', holdHelp:'Segure com o ponteiro ou teclado, ou ative para alternar o microfone.', liveTranscript:'Transcrição ao vivo', hideText:'Ocultar texto', showText:'Mostrar texto',
+    transcriptEmpty:'Sua conversa aparecerá aqui enquanto você fala.', history:'Conversas', historyIntro:'Retome uma conversa anterior.',
+    search:'Buscar conversas', newest:'Mais recentes', oldest:'Mais antigas', alphabetical:'Nome A–Z', copy:'Copiar', download:'Baixar',
+    rename:'Renomear', delete:'Excluir', settings:'Configurações', settingsIntro:'Personalize sua conversa.', practiceSetup:'Prática',
+    targetLanguage:'Idioma de prática', level:'Nível', beginner:'Iniciante', intermediate:'Intermediário', advanced:'Avançado', pace:'Ritmo da fala',
+    verySlow:'Muito lento', slower:'Um pouco mais lento', natural:'Natural', faster:'Mais rápido', inputMode:'Microfone', voiceActivation:'Ativação por voz',
+    pushToTalk:'Aperte para falar', shortcut:'Atalho para falar', shortcutHelp:'Selecione este campo e pressione uma combinação. O atalho funciona com esta aba ativa.', preferences:'Preferências de prática', preferencesPlaceholder:'Temas ou pedidos opcionais', preferencesNote:'Compartilhadas com o parceiro como um pedido de conversa.', voiceProvider:'Voz e provedor', provider:'Provedor', voice:'Voz', apiKey:'Chave API do provedor',
+    keyPlaceholder:'Insira uma nova chave para salvar', keyNote:'As chaves são criptografadas no servidor e não aparecem novamente.', appearance:'Aparência',
+    interfaceLanguage:'Idioma da interface', theme:'Tema', light:'Claro', dark:'Escuro', openLogAutomatically:'Abrir o histórico ao encerrar uma sessão', save:'Salvar configurações', signOut:'Sair',
+    keySaved:'Há uma chave salva para este provedor.', keyMissing:'Nenhuma chave salva para este provedor.', saved:'Configurações salvas.',
+    noChats:'Nenhuma conversa salva ainda.', noResults:'Nenhuma conversa encontrada.', moreChats:'Carregar mais conversas', moreMessages:'Carregar mensagens anteriores', historyChanged:'O histórico mudou e foi atualizado. Tente novamente.', renamePrompt:'Novo nome da conversa:',
+    deleteConfirm:'Excluir esta conversa permanentemente?', copied:'Conversa copiada.', copyFailed:'Não foi possível copiar a conversa.', downloadFailed:'Não foi possível baixar a conversa.',
+    missingKey:'Adicione uma chave API nas configurações.', accessDenied:'O portal de autenticação não forneceu uma identidade válida.',
+    micFailed:'Não foi possível acessar o microfone. Verifique as permissões e use HTTPS.', finished:'Conversa encerrada', start:'Iniciar conversa', end:'Encerrar conversa', closeHistory:'Fechar conversas', closeSettings:'Fechar configurações', sortConversations:'Ordenar conversas',
+  },
+};
+export function t(locale, key) { return translations[locale]?.[key] || translations.en[key] || key; }
+export function translate(locale) {
+  document.documentElement.lang = locale === 'pt' ? 'pt-BR' : locale;
+  for (const element of document.querySelectorAll('[data-i18n]')) element.textContent = t(locale, element.dataset.i18n);
+  for (const element of document.querySelectorAll('[data-placeholder]')) element.placeholder = t(locale, element.dataset.placeholder);
+  for (const element of document.querySelectorAll('[data-aria]')) element.setAttribute('aria-label', t(locale, element.dataset.aria));
+}

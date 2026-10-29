@@ -1,5 +1,6 @@
 /target/
 /conversations/
+/speeching-web-data/
 node_modules/
 .env
 .env.*

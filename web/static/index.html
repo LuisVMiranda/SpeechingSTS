@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Speeching</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Speeching home"><span class="brand-mark">sp</span><span>Speeching</span></a>
+      <nav id="workspace-tools" class="tools" aria-label="Workspace" hidden>
+        <button class="icon-button" id="history-toggle" type="button" aria-label="Conversation history" title="Conversation history" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg></button>
+        <button class="icon-button" id="settings-toggle" type="button" aria-label="Settings" title="Settings" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg></button>
+      </nav>
+    </header>
+
+    <section id="login-view" class="login-view" hidden>
+      <h1 data-i18n="welcome">Welcome back</h1>
+      <p data-i18n="loginIntro">Sign in to your private practice space.</p>
+      <form id="login-form" class="stack">
+        <label><span data-i18n="username">Username</span><input name="username" autocomplete="username" required maxlength="64"></label>
+        <label><span data-i18n="password">Password</span><input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label>
+        <button class="primary" data-i18n="signIn">Sign in</button>
+      </form>
+    </section>
+
+    <div id="workspace" class="workspace" hidden>
+      <section class="practice" aria-labelledby="practice-title">
+        <div class="conversation-picker">
+          <label for="chat-select" data-i18n="conversation">Conversation</label>
+          <select id="chat-select"><option value="" data-i18n="newConversation">New conversation</option></select>
+        </div>
+        <div class="stage">
+          <h1 id="practice-title" class="sr-only" data-i18n="practice">Language practice</h1>
+          <p class="session-label"><span id="practice-language">Spanish</span><span aria-hidden="true"> · </span><span data-i18n="partner">AI partner</span></p>
+          <button id="mic" class="mic" type="button" aria-label="Start conversation" title="Start conversation"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="17" y="7" width="14" height="24" rx="7"/><path d="M12 24v2a12 12 0 0 0 24 0v-2M24 38v5m-6 0h12"/></svg></button>
+          <p class="status" id="status" role="status" data-i18n="ready">Ready when you are</p>
+          <p class="timer" id="timer" aria-label="Conversation duration" data-aria="conversationDuration">00:00</p>
+          <svg class="wave" id="wave" viewBox="0 0 240 42" aria-hidden="true"><path class="wave-one" d="M2 21c12 0 15-6 24-6s12 12 21 12 11-20 20-20 11 28 20 28 12-25 22-25 11 22 20 22 11-18 20-18 12 12 21 12 11-8 20-8 11 3 19 3h29"/><path class="wave-two" d="M2 21c12 0 15 5 24 5s12-10 21-10 11 16 20 16 11-22 20-22 12 23 22 23 11-22 20-22 11 16 20 16 12-10 21-10 11 7 20 7 11-3 19-3h29"/></svg>
+          <button id="hold" class="hold" type="button" hidden aria-pressed="false" aria-describedby="hold-help" data-i18n="holdTalk">Hold to talk</button>
+          <p id="hold-help" class="sr-only" data-i18n="holdHelp">Hold with a pointer or keyboard, or activate to toggle the microphone.</p>
+          <p id="hint" class="hint" data-i18n="startHint">Tap the microphone to start</p>
+        </div>
+        <section class="transcript" aria-label="Live transcript" data-aria="liveTranscript"><div class="section-line"><h2 data-i18n="liveTranscript">Live transcript</h2><button id="minimal" class="text-button" type="button" data-i18n="hideText">Hide text</button></div><div id="live-messages" class="live-messages"><p class="empty" data-i18n="transcriptEmpty">Your conversation will appear here as you speak.</p></div></section>
+      </section>
+
+      <aside class="drawer" id="history-panel" aria-labelledby="history-title" hidden>
+        <div class="panel-heading"><div><h2 id="history-title" tabindex="-1" data-i18n="history">Conversations</h2><p data-i18n="historyIntro">Pick up where you left off.</p></div><button class="close icon-button" data-close="history" data-aria="closeHistory" aria-label="Close history" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="history-tools"><input id="search" type="search" data-aria="search" aria-label="Search conversations" data-placeholder="search" placeholder="Search conversations"><select id="sort" aria-label="Sort conversations" data-aria="sortConversations"><option value="newest" data-i18n="newest">Newest first</option><option value="oldest" data-i18n="oldest">Oldest first</option><option value="title" data-i18n="alphabetical">Name A–Z</option></select></div>
+        <div id="chat-list" class="chat-list"></div>
+        <button id="more-chats" class="text-button" type="button" data-i18n="moreChats" hidden>Load more conversations</button>
+        <div class="log" id="log" hidden><div class="section-line"><h3 id="log-title"></h3><span id="log-duration" class="meta"></span></div><button id="more-messages" class="text-button" type="button" data-i18n="moreMessages" hidden>Load earlier messages</button><div id="log-messages" class="log-messages"></div><div class="log-actions"><button id="copy" class="quiet" data-i18n="copy">Copy</button><button id="download" class="quiet" data-i18n="download">Download</button><button id="rename" class="quiet" data-i18n="rename">Rename</button><button id="delete" class="quiet danger" data-i18n="delete">Delete</button></div></div>
+      </aside>
+
+      <aside class="drawer" id="settings-panel" aria-labelledby="settings-title" hidden>
+        <div class="panel-heading"><div><h2 id="settings-title" tabindex="-1" data-i18n="settings">Settings</h2><p data-i18n="settingsIntro">Make the conversation yours.</p></div><button class="close icon-button" data-close="settings" data-aria="closeSettings" aria-label="Close settings" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <form id="settings-form" class="settings-form">
+          <fieldset><legend data-i18n="practiceSetup">Practice</legend><div class="fields">
+            <label><span data-i18n="targetLanguage">Practice language</span><select name="language" id="language"></select></label>
+            <label><span data-i18n="level">Level</span><select name="level"><option value="Beginner" data-i18n="beginner">Beginner</option><option value="Intermediate" data-i18n="intermediate" selected>Intermediate</option><option value="Advanced" data-i18n="advanced">Advanced</option></select></label>
+            <label><span data-i18n="pace">Speaking pace</span><select name="pace"><option value="very-slow" data-i18n="verySlow">Very slow</option><option value="slow" data-i18n="slower">A little slower</option><option value="normal" data-i18n="natural" selected>Natural</option><option value="fast" data-i18n="faster">Faster</option></select></label>
+            <label><span data-i18n="inputMode">Microphone</span><select name="input_mode"><option value="voice" data-i18n="voiceActivation">Voice activated</option><option value="push" data-i18n="pushToTalk">Push to talk</option></select></label>
+            <label class="full" id="shortcut-field" hidden><span data-i18n="shortcut">Push-to-talk shortcut</span><input name="shortcut" id="shortcut" readonly value="Space" aria-describedby="shortcut-help"><small id="shortcut-help" data-i18n="shortcutHelp">Focus this field and press a key combination. The shortcut works while this tab is active.</small></label>
+            <label class="full"><span data-i18n="preferences">Practice preferences</span><textarea name="preferences" rows="3" maxlength="1000" data-placeholder="preferencesPlaceholder" placeholder="Optional topics or requests"></textarea><small data-i18n="preferencesNote">Shared with the partner as a conversation request.</small></label>
+          </div></fieldset>
+          <fieldset><legend data-i18n="voiceProvider">Voice &amp; provider</legend><div class="fields">
+            <label><span data-i18n="provider">Provider</span><select name="provider" id="provider"><option value="gemini">Gemini Live</option><option value="openai">OpenAI Realtime</option></select></label>
+            <label><span data-i18n="voice">Voice</span><select name="voice" id="voice"></select></label>
+            <label class="full"><span data-i18n="apiKey">Provider API key</span><input type="password" id="api-key" autocomplete="off" data-placeholder="keyPlaceholder" placeholder="Enter a new key to save" maxlength="2560"><small id="key-status"></small></label>
+          </div><p class="field-note" data-i18n="keyNote">Keys are encrypted on the server and never shown again.</p></fieldset>
+          <fieldset><legend data-i18n="appearance">Appearance</legend><div class="fields">
+            <label><span data-i18n="interfaceLanguage">Interface language</span><select name="ui_language"><option value="en">English</option><option value="es">Español</option><option value="pt">Português (Brasil)</option></select></label>
+            <label><span data-i18n="theme">Theme</span><select name="theme"><option value="light" data-i18n="light">Light</option><option value="dark" data-i18n="dark">Dark</option></select></label>
+          </div></fieldset>
+          <label class="check"><input type="checkbox" name="auto_open_log"><span data-i18n="openLogAutomatically">Open the conversation log after a session</span></label>
+          <div class="settings-actions"><button type="submit" class="primary" data-i18n="save">Save settings</button><button type="button" id="logout" class="text-button" data-i18n="signOut">Sign out</button></div>
+        </form>
+      </aside>
+    </div>
+    <p id="notice" class="notice" role="status" hidden></p>
+  </main>
+</body>
+</html>

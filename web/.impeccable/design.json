@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-29T22:05:37Z",
+  "title": "Design System: Speeching",
+  "extensions": {
+    "colorMeta": {
+      "light-accent": { "role": "primary", "displayName": "Speeching blue" },
+      "light-surface": { "role": "neutral", "displayName": "Light surface" },
+      "dark-surface": { "role": "neutral", "displayName": "Dark surface" }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "Interface", "purpose": "Default interface text and controls." },
+      "heading": { "displayName": "Section heading", "purpose": "Panel and section headings." },
+      "field-label": { "displayName": "Field label", "purpose": "Labels above form controls." }
+    },
+    "shadows": [
+      { "name": "light-panel", "value": "0 18px 50px rgba(0,0,0,.12)", "purpose": "Practice, drawer, and login surfaces in light mode." },
+      { "name": "dark-panel", "value": "0 18px 50px rgba(0,0,0,.3)", "purpose": "Practice, drawer, and login surfaces in dark mode." },
+      { "name": "microphone-ring", "value": "0 0 0 8px var(--surface), 0 0 0 9px #a8bce3", "purpose": "Ring around the idle microphone." },
+      { "name": "microphone-active-ring", "value": "0 0 0 8px var(--surface), 0 0 0 9px #c97983", "purpose": "Ring around the active microphone." },
+      { "name": "notice", "value": "0 8px 24px rgba(0,0,0,.2)", "purpose": "Floating status notice." }
+    ],
+    "motion": [
+      { "name": "microphone-transition", "value": "transform .2s ease, background .2s ease, box-shadow .2s ease", "purpose": "Microphone hover, press, and active changes." },
+      { "name": "waveform", "value": "wave 1.05s ease-in-out infinite alternate", "purpose": "Active waveform; the second path uses a .8s duration and -.5s delay." },
+      { "name": "reduced-motion", "value": ".01ms", "purpose": "Animation and transition durations under prefers-reduced-motion: reduce; animations run once." }
+    ],
+    "breakpoints": [
+      { "name": "drawer-stack", "value": "800px" },
+      { "name": "compact-controls", "value": "390px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Fixed-blue action for signing in or saving settings.",
+      "html": "<button class=\"ds-primary\" type=\"button\">Save settings</button>",
+      "css": ".ds-primary{font-family:\"Segoe UI\",system-ui,sans-serif;border:0;background:#2768ed;color:white;border-radius:9px;padding:11px 16px;font-size:.85rem;font-weight:700;cursor:pointer}.ds-primary:hover{background:#1853c8}.ds-primary:focus-visible{outline:3px solid var(--blue,#2768ed);outline-offset:3px}.ds-primary:disabled{cursor:not-allowed;opacity:.55}"
+    },
+    {
+      "name": "Utility button",
+      "kind": "button",
+      "description": "Bordered square control for history, settings, or closing a panel.",
+      "html": "<button class=\"ds-icon-button\" type=\"button\" aria-label=\"Conversation history\" aria-expanded=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 6h16M4 12h16M4 18h11\"/></svg></button>",
+      "css": ".ds-icon-button{box-sizing:border-box;display:grid;place-items:center;width:40px;height:40px;color:var(--ink,#182439);background:var(--surface,#fff);border:1px solid var(--line,#d9e1ec);border-radius:11px;cursor:pointer}.ds-icon-button svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.ds-icon-button:hover,.ds-icon-button[aria-expanded=\"true\"]{background:var(--soft,#eef4ff);color:var(--blue-dark,#1853c8);border-color:var(--blue,#2768ed)}.ds-icon-button:focus-visible{outline:3px solid var(--blue,#2768ed);outline-offset:3px}"
+    },
+    {
+      "name": "Workspace navigation",
+      "kind": "nav",
+      "description": "Compact history and settings controls beside the brand.",
+      "html": "<nav class=\"ds-tools\" aria-label=\"Workspace\"><button class=\"ds-tool\" type=\"button\" aria-label=\"Conversation history\" aria-expanded=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 6h16M4 12h16M4 18h11\"/></svg></button><button class=\"ds-tool\" type=\"button\" aria-label=\"Settings\" aria-expanded=\"false\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 7h16M4 17h16M9 4v6m6 4v6\"/><circle cx=\"9\" cy=\"7\" r=\"2\"/><circle cx=\"15\" cy=\"17\" r=\"2\"/></svg></button></nav>",
+      "css": ".ds-tools{display:flex;gap:8px}.ds-tool{box-sizing:border-box;display:grid;place-items:center;width:40px;height:40px;color:var(--ink,#182439);background:var(--surface,#fff);border:1px solid var(--line,#d9e1ec);border-radius:11px;cursor:pointer}.ds-tool svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.ds-tool:hover,.ds-tool[aria-expanded=\"true\"]{background:var(--soft,#eef4ff);color:var(--blue-dark,#1853c8);border-color:var(--blue,#2768ed)}.ds-tool:focus-visible{outline:3px solid var(--blue,#2768ed);outline-offset:3px}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "field-light",
+      "description": "Theme-aware input with a label above the control.",
+      "html": "<label class=\"ds-field\"><span>Username</span><input name=\"username\" autocomplete=\"username\"></label>",
+      "css": ".ds-field{display:block;font-family:\"Segoe UI\",system-ui,sans-serif}.ds-field span{display:block;color:var(--muted,#52637c);font-size:.76rem;font-weight:650;margin-bottom:6px}.ds-field input{box-sizing:border-box;font:inherit;color:var(--ink,#182439);background:var(--surface,#fff);border:1px solid var(--line,#d9e1ec);border-radius:9px;min-height:42px;padding:9px 11px;width:100%}.ds-field input::placeholder{color:var(--muted,#52637c);opacity:1}.ds-field input:focus-visible{outline:3px solid var(--blue,#2768ed);outline-offset:3px}"
+    },
+    {
+      "name": "Microphone",
+      "kind": "button",
+      "refersTo": "microphone",
+      "description": "Circular voice-session control; the active class changes the fill and ring.",
+      "html": "<button class=\"ds-mic\" type=\"button\" aria-label=\"Start conversation\"><svg viewBox=\"0 0 48 48\" aria-hidden=\"true\"><rect x=\"17\" y=\"7\" width=\"14\" height=\"24\" rx=\"7\"/><path d=\"M12 24v2a12 12 0 0 0 24 0v-2M24 38v5m-6 0h12\"/></svg></button>",
+      "css": ".ds-mic{position:relative;width:132px;height:132px;border:0;border-radius:50%;background:#2768ed;color:#fff;margin:28px 0 18px;box-shadow:0 0 0 8px var(--surface,#fff),0 0 0 9px #a8bce3;transition:transform .2s ease,background .2s ease,box-shadow .2s ease;cursor:pointer}.ds-mic svg{display:block;width:57px;height:57px;margin:auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.ds-mic:hover{transform:scale(1.04);background:#1853c8}.ds-mic:active{transform:scale(.98)}.ds-mic.active{background:#a63847;box-shadow:0 0 0 8px var(--surface,#fff),0 0 0 9px #c97983}.ds-mic:focus-visible{outline:3px solid var(--blue,#2768ed);outline-offset:3px}@media(max-width:390px){.ds-mic{width:120px;height:120px}}@media(prefers-reduced-motion:reduce){.ds-mic{transition-duration:.01ms!important}}"
+    },
+    {
+      "name": "Transcript message",
+      "kind": "card",
+      "refersTo": "message-light",
+      "description": "Soft assistant message; the user variant is transparent and bordered.",
+      "html": "<div class=\"ds-message\"><b>AI partner</b>Hello!</div><div class=\"ds-message ds-user\"><b>You</b>Hi!</div>",
+      "css": ".ds-message{font-family:\"Segoe UI\",system-ui,sans-serif;color:var(--ink,#182439);padding:9px 12px;margin:7px 0;border-radius:10px;background:var(--soft,#eef4ff);font-size:.85rem;line-height:1.45;overflow-wrap:anywhere}.ds-message.ds-user{background:transparent;border:1px solid var(--line,#d9e1ec)}.ds-message b{display:block;color:var(--muted,#52637c);font-size:.8rem;margin-bottom:3px}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "description": "Quiet bordered action used in conversation history.",
+      "html": "<button class=\"ds-quiet\" type=\"button\">Copy</button>",
+      "css": ".ds-quiet{font-family:\"Segoe UI\",system-ui,sans-serif;border:1px solid var(--line,#d9e1ec);background:var(--surface,#fff);border-radius:8px;padding:7px 10px;color:var(--ink,#182439);font-size:.78rem;cursor:pointer}.ds-quiet:hover{background:var(--soft,#eef4ff)}.ds-quiet:focus-visible{outline:3px solid var(--blue,#2768ed);outline-offset:3px}"
+    },
+    {
+      "name": "Drawer",
+      "kind": "card",
+      "description": "Rounded container for conversation history and settings.",
+      "html": "<section class=\"ds-drawer\"><div class=\"ds-panel-heading\"><div><h2>Conversations</h2><p>Pick up where you left off.</p></div></div></section>",
+      "css": ".ds-drawer{font-family:\"Segoe UI\",system-ui,sans-serif;color:var(--ink,#182439);background:var(--surface,#fff);box-shadow:var(--shadow,0 18px 50px rgba(0,0,0,.12));border-radius:16px;padding:23px}.ds-panel-heading{display:flex;justify-content:space-between;gap:14px;margin-bottom:24px}.ds-panel-heading h2{margin:0;font-size:1.08rem;letter-spacing:-.025em}.ds-panel-heading p{margin:5px 0 0;color:var(--muted,#52637c);font-size:.82rem}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Compact voice practice",
+    "overview": "A prominent blue microphone anchors a quiet, compact conversation surface; utilities, transcripts, and settings stay close at hand. Light and dark themes share the same shapes and hierarchy.",
+    "keyCharacteristics": [
+      "A single centered practice panel and a large circular microphone.",
+      "Cool neutrals with a blue action color and restrained rounded controls.",
+      "Dense, readable controls with visible focus and reduced-motion support."
+    ],
+    "rules": [
+      { "name": "The Theme Roles Rule", "body": "Use the matching page, surface, ink, muted, line, accent, and soft colors together for each theme.", "section": "colors" },
+      { "name": "The Visible Focus Rule", "body": "Buttons, inputs, and selects show a 3px theme-accent outline with a 3px offset on keyboard focus.", "section": "components" }
+    ],
+    "dos": [
+      "Do pair light and dark theme roles for surfaces, text, dividers, and secondary accents.",
+      "Do keep the microphone and connection status prominent in the practice surface.",
+      "Do preserve visible keyboard focus and support reduced motion."
+    ],
+    "donts": [
+      "Don't remove the text status when presenting the animated activity waveform.",
+      "Don't prevent the drawer and form controls from stacking on narrow screens."
+    ]
+  }
+}
