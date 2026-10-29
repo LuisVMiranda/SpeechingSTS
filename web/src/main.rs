@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod account_tests;
+mod accounts;
 mod api;
 #[cfg(test)]
 mod api_chat_tests;
@@ -154,12 +157,14 @@ fn app(state: AppState) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/app.js", get(javascript))
+        .route("/auth.js", get(auth_javascript))
         .route("/audio.js", get(audio_javascript))
         .route("/i18n.js", get(i18n_javascript))
         .route("/worklet.js", get(worklet))
         .route("/style.css", get(stylesheet))
         .route("/api/mode", get(api::mode))
         .route("/api/login", post(api::login))
+        .route("/api/register", post(accounts::register))
         .merge(protected)
         .layer(axum::extract::DefaultBodyLimit::max(16_384))
         .layer(middleware::from_fn(security_headers))
@@ -196,6 +201,12 @@ async fn audio_javascript() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
         include_str!("../static/audio.js"),
+    )
+}
+async fn auth_javascript() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/javascript; charset=utf-8")],
+        include_str!("../static/auth.js"),
     )
 }
 async fn i18n_javascript() -> impl IntoResponse {

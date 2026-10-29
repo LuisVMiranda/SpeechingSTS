@@ -24,6 +24,7 @@ pub(crate) fn state() -> AppState {
         listen: "127.0.0.1:8787".parse().unwrap(),
         origin: "http://127.0.0.1:8787".into(),
         auth: AuthMode::Builtin,
+        allow_registration: true,
         trusted_proxy: "127.0.0.1".parse().unwrap(),
         trust_client_ip_header: false,
         proxy_secret: None,

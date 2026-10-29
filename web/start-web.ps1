@@ -1,7 +1,9 @@
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [switch]$NoOpen,
     [switch]$NoBuild,
+    [ValidateSet('builtin', 'off')]
+    [string]$AuthMode,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Command = @()
 )
@@ -15,10 +17,11 @@ $manifest = Join-Path $webRoot 'Cargo.toml'
 function Test-ReleaseCurrent {
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { return $false }
     $builtAt = (Get-Item -LiteralPath $executable).LastWriteTimeUtc
+    # Files used only by tests do not change the release binary.
     $inputs = @(
         Get-Item -LiteralPath $manifest
         Get-Item -LiteralPath (Join-Path $webRoot 'Cargo.lock')
-        Get-ChildItem -LiteralPath (Join-Path $webRoot 'src') -File -Recurse
+        Get-ChildItem -LiteralPath (Join-Path $webRoot 'src') -File -Recurse | Where-Object { $_.Name -notmatch '(^tests|_tests)\.rs$' }
         Get-ChildItem -LiteralPath (Join-Path $webRoot 'static') -File -Recurse
     )
     return -not ($inputs | Where-Object { $_.LastWriteTimeUtc -gt $builtAt } | Select-Object -First 1)
@@ -176,27 +179,44 @@ function Invoke-AccountCommand([string[]]$Arguments) {
 
 function Initialize-Account([string]$Database) {
     $mode = if ($env:SPEECHING_AUTH) { $env:SPEECHING_AUTH } else { 'builtin' }
-    if ($mode -ne 'builtin' -or (Test-Path -LiteralPath $Database)) { return }
+    if ($mode -ne 'builtin' -or $env:SPEECHING_ALLOW_REGISTRATION -ne 'false' -or (Test-Path -LiteralPath $Database)) { return }
     Write-Host 'Create the first web account. The password is not displayed while you type.'
     $username = Read-Host 'Username'
     if ([string]::IsNullOrWhiteSpace($username)) { throw 'Account setup canceled. Run start-web.cmd again to create an account.' }
     Invoke-AccountCommand @('user', 'add', $username)
 }
 
-function Open-PracticeWindow([string]$Url) {
+function Initialize-Authentication {
+    $setting = Join-Path $env:SPEECHING_WEB_DATA 'launcher-auth'
+    if ($AuthMode) {
+        $env:SPEECHING_AUTH = $AuthMode
+        [IO.File]::WriteAllText($setting, $AuthMode)
+    } elseif ($env:SPEECHING_AUTH) {
+        return
+    } elseif (Test-Path -LiteralPath $setting -PathType Leaf) {
+        $env:SPEECHING_AUTH = [IO.File]::ReadAllText($setting).Trim()
+    } else {
+        Write-Host 'Choose how people access Speeching web:'
+        Write-Host '  1) Built-in login and separate accounts (recommended)'
+        Write-Host '  2) No login (one shared guest; protect access externally)'
+        $choice = Read-Host 'Choice [1]'
+        switch ($choice) {
+            { $_ -eq '' -or $_ -eq '1' } { $env:SPEECHING_AUTH = 'builtin' }
+            '2' { $env:SPEECHING_AUTH = 'off' }
+            default { throw 'Choose 1 or 2 and restart.' }
+        }
+        [IO.File]::WriteAllText($setting, $env:SPEECHING_AUTH)
+    }
+    if ($env:SPEECHING_AUTH -notin @('builtin', 'off')) {
+        throw 'The saved launcher authentication setting is invalid.'
+    }
+}
+
+function Open-PracticeTab([string]$Url) {
     $browser = $env:SPEECHING_WEB_BROWSER
     if ($browser -and -not (Test-Path -LiteralPath $browser -PathType Leaf)) {
         Write-Host "The configured browser was not found. Open $Url manually."
         return
-    }
-    if (-not $browser) {
-        $candidates = @()
-        foreach ($directory in @(${env:ProgramFiles(x86)}, $env:ProgramFiles, $env:LOCALAPPDATA)) {
-            if (-not $directory) { continue }
-            $candidates += Join-Path $directory 'Microsoft\Edge\Application\msedge.exe'
-            $candidates += Join-Path $directory 'Google\Chrome\Application\chrome.exe'
-        }
-        $browser = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     }
     $masterKey = $env:SPEECHING_MASTER_KEY
     $proxySecret = $env:SPEECHING_PROXY_SECRET
@@ -204,7 +224,7 @@ function Open-PracticeWindow([string]$Url) {
         $env:SPEECHING_MASTER_KEY = $null
         $env:SPEECHING_PROXY_SECRET = $null
         if ($browser) {
-            Start-Process -FilePath $browser -ArgumentList @("--app=$Url", '--window-size=460,850') | Out-Null
+            Start-Process -FilePath $browser -ArgumentList @($Url) | Out-Null
         } else {
             Start-Process -FilePath $Url | Out-Null
         }
@@ -228,7 +248,7 @@ function Start-WebService {
             Write-Host $_
             if (-not $NoOpen -and -not $opened -and "$_".Contains('Speeching web started')) {
                 $opened = $true
-                Open-PracticeWindow "$url/"
+                Open-PracticeTab "$url/"
             }
         }
         if ($LASTEXITCODE -ne 0) { throw "The web service exited with code $LASTEXITCODE." }
@@ -244,6 +264,7 @@ try {
     if ($Command.Count -gt 0) {
         Invoke-AccountCommand $Command
     } else {
+        Initialize-Authentication
         Initialize-Account $database
         Start-WebService
     }

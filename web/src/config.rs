@@ -18,6 +18,7 @@ pub struct Config {
     pub listen: SocketAddr,
     pub origin: String,
     pub auth: AuthMode,
+    pub allow_registration: bool,
     pub trusted_proxy: IpAddr,
     pub trust_client_ip_header: bool,
     pub proxy_secret: Option<String>,
@@ -37,6 +38,8 @@ impl Config {
             .parse()
             .map_err(|_| "Invalid SPEECHING_LISTEN address.")?;
         let auth = parse_auth(&env_value("SPEECHING_AUTH", "builtin"))?;
+        let allow_registration =
+            parse_registration(&env_value("SPEECHING_ALLOW_REGISTRATION", "true"))?;
         if auth == AuthMode::Off && !listen.ip().is_loopback() {
             return Err("Authentication-off mode must listen on a loopback address.".into());
         }
@@ -66,6 +69,7 @@ impl Config {
             listen,
             origin,
             auth,
+            allow_registration,
             trusted_proxy,
             trust_client_ip_header,
             proxy_secret,
@@ -97,6 +101,14 @@ fn parse_auth(value: &str) -> Result<AuthMode, String> {
         "proxy" => Ok(AuthMode::Proxy),
         "off" => Ok(AuthMode::Off),
         _ => Err("SPEECHING_AUTH must be builtin, proxy, or off.".into()),
+    }
+}
+
+fn parse_registration(value: &str) -> Result<bool, String> {
+    match value {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err("SPEECHING_ALLOW_REGISTRATION must be true or false.".into()),
     }
 }
 
@@ -187,6 +199,15 @@ fn provider_url(value: &str) -> Result<Url, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registration_setting_requires_an_explicit_boolean() {
+        assert!(parse_registration("true").unwrap());
+        assert!(!parse_registration("false").unwrap());
+        for invalid in ["", "TRUE", "yes", "0", "false "] {
+            assert!(parse_registration(invalid).is_err());
+        }
+    }
 
     #[test]
     fn validates_origin_and_provider_urls() {

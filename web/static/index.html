@@ -19,13 +19,30 @@
     </header>
 
     <section id="login-view" class="login-view" hidden>
-      <h1 data-i18n="welcome">Welcome back</h1>
-      <p data-i18n="loginIntro">Sign in to your private practice space.</p>
+      <h1 id="auth-heading" tabindex="-1" data-i18n="welcome">Welcome back</h1>
+      <p id="auth-intro" data-i18n="loginIntro">Sign in to your private practice space.</p>
       <form id="login-form" class="stack">
         <label><span data-i18n="username">Username</span><input name="username" autocomplete="username" required maxlength="64"></label>
         <label><span data-i18n="password">Password</span><input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label>
+        <div class="auth-actions"><button id="forgot-password" class="text-button" type="button" data-i18n="forgotPassword">Forgot password?</button></div>
         <button class="primary" data-i18n="signIn">Sign in</button>
       </form>
+      <form id="register-form" class="stack" hidden>
+        <label><span data-i18n="username">Username</span><input name="username" autocomplete="username" required maxlength="64" aria-describedby="username-help"></label>
+        <small id="username-help" class="auth-help" data-i18n="usernameHelp">Letters, numbers, dots, underscores, hyphens or @.</small>
+        <label><span data-i18n="password">Password</span><input name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="1024" aria-describedby="password-help"></label>
+        <small id="password-help" class="auth-help" data-i18n="passwordHelp">Use at least 12 characters.</small>
+        <label><span data-i18n="confirmPassword">Confirm password</span><input name="confirm" type="password" autocomplete="new-password" required minlength="12" maxlength="1024"></label>
+        <button class="primary" data-i18n="createAccount">Create account</button>
+      </form>
+      <div id="recovery-help" class="recovery-help" hidden>
+        <p data-i18n="recoveryHelp">Ask your server administrator to reset your password after confirming your identity. Your conversations will remain in your account.</p>
+        <p data-i18n="recoveryAdmin">If you administer the server, run the appropriate command on the server and replace USERNAME with the account name:</p>
+        <div class="auth-command"><span>Windows</span><code>start-web.cmd user add USERNAME</code></div>
+        <div class="auth-command"><span>macOS / Linux</span><code>./start-web.sh user add USERNAME</code></div>
+      </div>
+      <p id="auth-message" class="auth-message" role="status" aria-live="polite" hidden></p>
+      <div class="auth-footer"><button id="register-link" class="text-button" type="button" data-i18n="createAccount">Create account</button><button id="login-link" class="text-button" type="button" data-i18n="backToSignIn" hidden>Back to sign in</button></div>
     </section>
 
     <div id="workspace" class="workspace" hidden>

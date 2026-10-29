@@ -104,6 +104,15 @@ to{transform:scaleY(1.25)}
 .login-view h1{font-size:1.5rem}
 .login-view p{margin-top:8px;color:var(--muted);font-size:.88rem}
 .stack{display:grid;gap:16px;margin-top:24px}
+.auth-actions{display:flex;justify-content:flex-end;margin-top:-8px}
+.auth-help{color:var(--muted);font-size:.78rem;line-height:1.4;margin-top:-10px}
+.auth-footer{display:flex;justify-content:center;border-top:1px solid var(--line);margin-top:24px;padding-top:16px}
+.login-view .auth-message{margin-top:16px;padding:10px 12px;border-radius:9px;background:var(--soft);color:var(--ink);line-height:1.45}
+.recovery-help{margin-top:20px}
+.login-view .recovery-help p{line-height:1.55;margin-top:12px}
+.auth-command{display:grid;gap:5px;margin-top:14px}
+.auth-command span{color:var(--muted);font-size:.76rem;font-weight:650}
+.auth-command code{padding:10px 12px;border-radius:9px;background:var(--soft);color:var(--ink);font-size:.78rem;overflow-wrap:anywhere}
 .notice{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:min(90vw,520px);background:#182439;color:#fff;border-radius:10px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-size:.85rem;z-index:4}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 *{scrollbar-color:#9aacbf transparent;scrollbar-width:thin}

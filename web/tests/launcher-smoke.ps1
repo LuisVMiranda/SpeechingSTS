@@ -25,10 +25,12 @@ function Start-TestLauncher([hashtable]$Settings) {
     $info.CreateNoWindow = $true
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
+    if ($Settings.ContainsKey('AuthChoice')) { $info.RedirectStandardInput = $true }
     foreach ($name in @($info.EnvironmentVariables.Keys)) {
         if ($name -like 'SPEECHING_*') { $info.EnvironmentVariables.Remove($name) }
     }
     $info.EnvironmentVariables['SPEECHING_AUTH'] = 'off'
+    if ($Settings.ContainsKey('AuthChoice')) { $info.EnvironmentVariables.Remove('SPEECHING_AUTH') }
     $info.EnvironmentVariables['SPEECHING_WEB_DATA'] = $Settings.Data
     $info.EnvironmentVariables['SPEECHING_LISTEN'] = "127.0.0.1:$($Settings.Port)"
     if (-not $Settings.ContainsKey('AutoOrigin')) {
@@ -52,6 +54,10 @@ function Start-TestLauncher([hashtable]$Settings) {
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $info
     if (-not $process.Start()) { throw 'Could not start the test launcher.' }
+    if ($Settings.ContainsKey('AuthChoice')) {
+        $process.StandardInput.WriteLine($Settings.AuthChoice)
+        $process.StandardInput.Close()
+    }
     $children.Add([pscustomobject]@{ Process=$process; Port=$Settings.Port })
     return $process
 }
@@ -93,6 +99,15 @@ function Test-BuildAndRefresh {
     if (-not $process.WaitForExit(60000)) { throw 'The stale-release rebuild did not finish.' }
     if ($process.ExitCode -ne 0) { throw "The stale-release rebuild failed: $($process.StandardOutput.ReadToEnd()) $($process.StandardError.ReadToEnd())" }
     if ([IO.File]::ReadAllText($marker) -ne 'second:user add demo') { throw 'The stale release was not rebuilt.' }
+    $fixtureExecutable = Join-Path $fixtureWeb 'target\release\speeching-web.exe'
+    (Get-Item -LiteralPath $source).LastWriteTimeUtc = (Get-Item -LiteralPath $fixtureExecutable).LastWriteTimeUtc.AddSeconds(-1)
+    $testSource = Join-Path $fixtureWeb 'src\only_tests.rs'
+    [IO.File]::WriteAllText($testSource, '// test-only fixture', [Text.Encoding]::ASCII)
+    (Get-Item -LiteralPath $testSource).LastWriteTimeUtc = [DateTime]::UtcNow.AddSeconds(4)
+    $process = Start-TestLauncher $options
+    if (-not $process.WaitForExit(15000)) { throw 'The test-only source check did not finish.' }
+    $output = $process.StandardOutput.ReadToEnd() + $process.StandardError.ReadToEnd()
+    if ($process.ExitCode -ne 0 -or $output -match 'Building the current Rust web release') { throw 'Test-only source changes caused an unnecessary rebuild.' }
 }
 
 function Wait-Ready([object]$Process, [int]$Port) {
@@ -177,6 +192,27 @@ function Test-MissingKeyFailsClosed {
     if ((Test-Path -LiteralPath $key) -or (Get-FileHash -LiteralPath $database).Hash -ne $hash) { throw 'The launcher replaced a key or changed existing data.' }
 }
 
+function Test-AuthenticationChoice {
+    $options = @{
+        Port=(Get-FreePort); Data=(Join-Path $testRoot 'choice data');
+        KeyFile=(Join-Path $testRoot 'choice key\master.key'); Flags='-NoBuild -NoOpen'; AuthChoice='2'
+    }
+    $process = Start-TestLauncher $options
+    if ((Wait-Ready $process $options.Port).auth -ne 'off') { throw 'The selected authentication mode was not applied.' }
+    if ([IO.File]::ReadAllText((Join-Path $options.Data 'launcher-auth')).Trim() -ne 'off') { throw 'The authentication choice was not saved.' }
+    Stop-TestLauncher $process $options.Port
+    $options.Port = Get-FreePort
+    $options.AuthChoice = ''
+    $process = Start-TestLauncher $options
+    if ((Wait-Ready $process $options.Port).auth -ne 'off') { throw 'The saved authentication choice was not reused.' }
+    Stop-TestLauncher $process $options.Port
+    $options.Port = Get-FreePort
+    $options.Flags = '-NoBuild -NoOpen -AuthMode builtin'
+    $process = Start-TestLauncher $options
+    if ((Wait-Ready $process $options.Port).auth -ne 'builtin') { throw 'The explicit authentication override was not applied.' }
+    Stop-TestLauncher $process $options.Port
+}
+
 function New-BrowserProbe {
     $path = Join-Path $testRoot 'browser-probe.exe'
     $source = @'
@@ -206,7 +242,7 @@ function Test-BrowserLaunch {
     while (-not (Test-Path -LiteralPath $capture) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
     if (-not (Test-Path -LiteralPath $capture)) { throw 'The browser was not launched after the service became ready.' }
     $arguments = Get-Content -LiteralPath $capture
-    if ($arguments[0] -notmatch "--app=http://127.0.0.1:$port/" -or $arguments[0] -notmatch '--window-size=460,850' -or $arguments[1] -ne 'clear') {
+    if ($arguments[0] -ne "http://127.0.0.1:$port/" -or $arguments[1] -ne 'clear') {
         throw 'The browser launch arguments or secret isolation are incorrect.'
     }
     Stop-TestLauncher $process $port
@@ -235,10 +271,11 @@ function Test-PortConflictDoesNotOpenBrowser {
 try {
     Test-PersistentKey
     Test-MissingKeyFailsClosed
+    Test-AuthenticationChoice
     Test-BrowserLaunch
     Test-PortConflictDoesNotOpenBrowser
     Test-BuildAndRefresh
-    Write-Host 'Launcher checks passed: startup, protected key/data, restart, missing-key recovery, browser launch, port conflicts, and release builds.'
+    Write-Host 'Launcher checks passed: startup, protected key/data, authentication choice, restart, missing-key recovery, browser launch, port conflicts, and release builds.'
 } finally {
     foreach ($child in $children) {
         if ($child.Process.HasExited) { continue }

@@ -2,9 +2,9 @@ name: Web service
 
 on:
   push:
-    paths: ["web/**", ".github/workflows/web.yml"]
+    paths: ["web/**", "start-web.sh", "start-web.cmd", ".gitattributes", ".github/workflows/web.yml"]
   pull_request:
-    paths: ["web/**", ".github/workflows/web.yml"]
+    paths: ["web/**", "start-web.sh", "start-web.cmd", ".gitattributes", ".github/workflows/web.yml"]
 
 jobs:
   check:
@@ -32,6 +32,9 @@ jobs:
       - name: Test Windows launcher
         if: matrix.os == 'windows-latest'
         run: powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File tests/launcher-smoke.ps1
+      - name: Test Unix launcher
+        if: matrix.os != 'windows-latest'
+        run: bash tests/unix-launcher-smoke.sh
       - uses: actions/setup-node@v4
         if: matrix.os == 'windows-latest'
         with:

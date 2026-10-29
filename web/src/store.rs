@@ -56,6 +56,16 @@ impl Store {
         Ok(())
     }
 
+    pub fn create_user(&self, name: &str, hash: &str) -> Result<bool, String> {
+        let db = self.0.lock().map_err(|_| "Database unavailable")?;
+        db.execute(
+            "INSERT OR IGNORE INTO users(name,password_hash) VALUES(?1,?2)",
+            params![name, hash],
+        )
+        .map(|changed| changed == 1)
+        .map_err(|e| e.to_string())
+    }
+
     pub fn password_hash(&self, name: &str) -> Result<Option<String>, String> {
         let db = self.0.lock().map_err(|_| "Database unavailable")?;
         db.query_row(

@@ -115,7 +115,11 @@ async fn verify_login(
     Ok((verified, credential_version))
 }
 
-fn client_ip(state: &AppState, headers: &HeaderMap, peer: SocketAddr) -> std::net::IpAddr {
+pub(crate) fn client_ip(
+    state: &AppState,
+    headers: &HeaderMap,
+    peer: SocketAddr,
+) -> std::net::IpAddr {
     if !state.config.trust_client_ip_header || !auth::trusted_proxy(state, headers, peer) {
         return peer.ip();
     }
@@ -132,7 +136,9 @@ pub async fn mode(State(state): State<AppState>) -> Json<Value> {
         AuthMode::Proxy => "proxy",
         AuthMode::Off => "off",
     };
-    Json(json!({"auth":auth}))
+    Json(
+        json!({"auth":auth,"registration":state.config.auth == AuthMode::Builtin && state.config.allow_registration}),
+    )
 }
 
 pub async fn me(State(state): State<AppState>, Extension(user): Extension<Identity>) -> ApiResult {

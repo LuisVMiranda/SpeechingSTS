@@ -1,4 +1,5 @@
 import { AudioSession } from './audio.js';
+import { createAuth } from './auth.js';
 import { t, translate } from './i18n.js';
 
 const $ = id => document.getElementById(id);
@@ -15,6 +16,7 @@ const voiceTones = {
 let settings = { ...defaults }, user = null, mode = '', chatList = [], selectedLog = null, audio = null, timer = null, startTime = 0, minimal = false;
 let lastMessage = null, activeChat = '', soundTimer = null, identityEpoch = 0, chatSequence = 0, logSequence = 0, searchTimer = null, moreChats = false, chatRevision = 0;
 let shortcutHeld = false;
+let authUi;
 const liveMessagesById = new Map();
 const text = key => t(settings.ui_language, key);
 
@@ -235,23 +237,19 @@ async function submitSettings(event) {
     settings = { ...defaults, ...proposed }; saveSettings(); applySettings(); renderPicker(); renderChats(); notify(text('saved'));
   } catch (error) { if (epoch === identityEpoch) notify(error.message); }
 }
-async function signIn(event) {
-  event.preventDefault();
-  try { await api('/api/login', { method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(event.target))) }); event.target.reset(); await initialize(); }
-  catch (error) { notify(error.message); }
-}
 async function initialize() {
   const epoch = ++identityEpoch;
-  const nextMode = (await api('/api/mode')).auth;
+  const authMode = await api('/api/mode');
+  const nextMode = authMode.auth;
   if (epoch !== identityEpoch) return;
   mode = nextMode;
   try { const nextUser = await api('/api/me'); if (epoch !== identityEpoch) return; user = nextUser; }
-  catch { if (epoch !== identityEpoch) return; $('workspace').hidden = true; $('workspace-tools').hidden = true; $('login-view').hidden = mode !== 'builtin'; if (mode !== 'builtin') notify(text('accessDenied')); return; }
+  catch { if (epoch !== identityEpoch) return; $('workspace').hidden = true; $('workspace-tools').hidden = true; $('login-view').hidden = mode !== 'builtin'; if (mode === 'builtin') authUi.showLogin(authMode.registration); else notify(text('accessDenied')); return; }
   loadSettings(); applySettings(); $('login-view').hidden = true; $('workspace').hidden = false; $('workspace-tools').hidden = false; await refreshChats();
 }
 
 function bindEvents() {
-  $('login-form').addEventListener('submit', signIn);
+  authUi = createAuth({ api, text, onSignIn:initialize });
   $('settings-form').addEventListener('submit', submitSettings);
   $('history-toggle').addEventListener('click', () => togglePanel('history'));
   $('settings-toggle').addEventListener('click', () => togglePanel('settings'));
