@@ -79,7 +79,10 @@ function createProxy(servicePort) {
   const server = http.createServer((request, response) => {
     const suffix = request.url.startsWith('/speeching/') ? request.url.slice('/speeching'.length) : request.url;
     const upstream = http.request({ hostname:'127.0.0.1', port:servicePort, path:suffix, method:request.method, headers:request.headers }, result => { response.writeHead(result.statusCode, result.headers); result.pipe(response); });
-    upstream.on('error', () => response.writeHead(502).end()); request.pipe(upstream);
+    upstream.on('error', () => response.writeHead(502).end());
+    // Exercise a slower key save rather than relying on a fast local round trip.
+    if (request.method === 'POST' && suffix.startsWith('/api/keys/')) setTimeout(() => request.pipe(upstream), 350);
+    else request.pipe(upstream);
   });
   server.on('upgrade', (request, socket, head) => {
     const upstream = net.connect(servicePort, '127.0.0.1', () => {
@@ -171,7 +174,8 @@ try {
     if (el('shortcut').value !== 'Ctrl+KeyT') throw Error('Shortcut remapping failed'); el('shortcut').blur();
     form.elements.preferences.value = 'Discuss astronomy'; form.elements.auto_open_log.checked = true;
     form.elements.ui_language.value = 'pt'; form.elements.theme.value = 'dark'; el('api-key').value = 'synthetic-test-key';
-    form.requestSubmit(); await wait();
+    form.requestSubmit();
+    for (let i=0;i<50 && (el('api-key').value || document.documentElement.lang !== 'pt-BR' || document.documentElement.dataset.theme !== 'dark');i++) await wait();
     if (el('api-key').value || document.documentElement.lang !== 'pt-BR' || document.documentElement.dataset.theme !== 'dark') throw Error('Settings did not save');
     el('mic').click();
     for (let i=0;i<50 && (el('hold').hidden || el('hold').disabled);i++) await wait();
