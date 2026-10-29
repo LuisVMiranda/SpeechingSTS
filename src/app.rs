@@ -4,6 +4,7 @@ use crate::{
         InputMode, Provider, Settings, Shortcut, Theme, WindowPositions, GEMINI_VOICES,
         OPENAI_VOICES,
     },
+    credentials,
     engine::Session,
     history::{self, ChatRecord, ChatStore, MemoryMessage, SavedSession},
     i18n::UiLanguage,
@@ -330,6 +331,9 @@ pub struct App {
     settings: Settings,
     gemini_key: String,
     openai_key: String,
+    gemini_key_saved: bool,
+    openai_key_saved: bool,
+    key_feedback: String,
     session: Option<Session>,
     receiver: Option<Receiver<Event>>,
     transcript: Transcript,
@@ -339,6 +343,7 @@ pub struct App {
     stopping: bool,
     muted: bool,
     settings_open: bool,
+    settings_section: SettingsSection,
     log_open: bool,
     log_feedback: String,
     initial_positioned: bool,
@@ -365,17 +370,43 @@ pub struct App {
     history_truncated: bool,
     active_shortcut: Shortcut,
     shortcut_capture: bool,
+    rename_active: bool,
+    rename_draft: String,
+    delete_confirm: bool,
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum SettingsSection {
+    #[default]
+    Practice,
+    Microphone,
+    Provider,
+    Appearance,
+}
+
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let settings = Settings::load();
         let language_input = settings.ui_language.text(&settings.language).to_owned();
         let applied_theme = settings.theme;
         apply_theme(&cc.egui_ctx, applied_theme);
+        let gemini = credentials::load(Provider::Gemini);
+        let openai = credentials::load(Provider::OpenAi);
+        let key_feedback = gemini
+            .as_ref()
+            .err()
+            .or_else(|| openai.as_ref().err())
+            .cloned()
+            .unwrap_or_default();
+        let gemini_key_saved = gemini.is_ok_and(|key| key.is_some());
+        let openai_key_saved = openai.is_ok_and(|key| key.is_some());
         Self {
             settings,
             gemini_key: String::new(),
             openai_key: String::new(),
+            gemini_key_saved,
+            openai_key_saved,
+            key_feedback,
             session: None,
             receiver: None,
             transcript: Transcript::default(),
@@ -385,6 +416,7 @@ impl App {
             stopping: false,
             muted: false,
             settings_open: false,
+            settings_section: SettingsSection::Practice,
             log_open: false,
             log_feedback: String::new(),
             initial_positioned: false,
@@ -411,6 +443,9 @@ impl App {
             history_truncated: false,
             active_shortcut: Shortcut::default(),
             shortcut_capture: false,
+            rename_active: false,
+            rename_draft: String::new(),
+            delete_confirm: false,
         }
     }
     fn start(&mut self) {
@@ -420,18 +455,36 @@ impl App {
             self.status = "Choose a supported language in settings.".into();
             self.error = true;
             self.settings_open = true;
+            self.settings_section = SettingsSection::Practice;
             return;
         };
         self.settings.language = language.to_owned();
         self.active_input_mode = self.settings.input_mode;
         self.active_shortcut = self.settings.push_to_talk_shortcut.clone();
-        let key = match self.settings.provider {
-            Provider::Gemini => self.gemini_key.trim().to_owned(),
-            Provider::OpenAi => self.openai_key.trim().to_owned(),
+        if let Err(error) = self.save_pending_keys() {
+            self.key_feedback = error.clone();
+            self.status = error;
+            self.error = true;
+            self.settings_open = true;
+            self.settings_section = SettingsSection::Provider;
+            return;
+        }
+        let key = match credentials::load(self.settings.provider) {
+            Ok(Some(key)) => key,
+            Ok(None) => String::new(),
+            Err(error) => {
+                self.key_feedback = error.clone();
+                self.status = error;
+                self.error = true;
+                self.settings_open = true;
+                self.settings_section = SettingsSection::Provider;
+                return;
+            }
         };
         if key.trim().is_empty() {
             self.status = "Add your API key in settings.".into();
             self.settings_open = true;
+            self.settings_section = SettingsSection::Provider;
             return;
         }
         if self.settings.model().trim().is_empty() || self.settings.voice().trim().is_empty() {
@@ -644,6 +697,85 @@ impl App {
             Err(error) => self.library_warning = error,
         }
     }
+    fn save_pending_keys(&mut self) -> Result<(), String> {
+        for provider in [Provider::Gemini, Provider::OpenAi] {
+            let draft = match provider {
+                Provider::Gemini => &mut self.gemini_key,
+                Provider::OpenAi => &mut self.openai_key,
+            };
+            if !draft.trim().is_empty() {
+                credentials::save(provider, draft)?;
+                draft.clear();
+                match provider {
+                    Provider::Gemini => self.gemini_key_saved = true,
+                    Provider::OpenAi => self.openai_key_saved = true,
+                }
+            }
+        }
+        self.key_feedback.clear();
+        Ok(())
+    }
+    fn forget_key(&mut self, provider: Provider) {
+        match credentials::forget(provider) {
+            Ok(()) => {
+                match provider {
+                    Provider::Gemini => {
+                        self.gemini_key_saved = false;
+                        self.gemini_key.clear();
+                    }
+                    Provider::OpenAi => {
+                        self.openai_key_saved = false;
+                        self.openai_key.clear();
+                    }
+                }
+                self.key_feedback = "Saved API key removed.".into();
+            }
+            Err(error) => self.key_feedback = error,
+        }
+    }
+    fn rename_chat(&mut self) {
+        if self.session.is_some() || !self.flush_history() {
+            return;
+        }
+        let Some(mut chat) = self.selected_chat.clone() else {
+            return;
+        };
+        match chat
+            .rename(&self.rename_draft)
+            .and_then(|_| self.store.save(&chat))
+        {
+            Ok(()) => {
+                self.selected_chat = Some(chat);
+                self.rename_active = false;
+                self.log_feedback = "Conversation renamed.".into();
+            }
+            Err(error) => self.log_feedback = error,
+        }
+    }
+    fn delete_chat(&mut self) {
+        if self.session.is_some() {
+            return;
+        }
+        let Some(chat) = &self.selected_chat else {
+            return;
+        };
+        match self.store.delete(&chat.id) {
+            Ok(()) => {
+                self.selected_chat = None;
+                self.transcript = Transcript::default();
+                self.history_dirty = false;
+                self.history_truncated = false;
+                self.clock = None;
+                self.rename_active = false;
+                self.log_feedback = "Conversation deleted.".into();
+                self.status = "Ready for a new conversation".into();
+                self.error = false;
+                self.refresh_library();
+            }
+            Err(error) => self.log_feedback = error,
+        }
+        self.delete_confirm = false;
+    }
     fn new_chat(&mut self) {
         if self.session.is_some() || !self.flush_history() {
             return;
@@ -653,6 +785,7 @@ impl App {
         self.history_truncated = false;
         self.clock = None;
         self.library_open = false;
+        self.rename_active = false;
         self.log_feedback.clear();
         self.status = "Ready for a new conversation".into();
         self.error = false;
@@ -668,7 +801,8 @@ impl App {
                 self.selected_chat = Some(chat);
                 self.clock = None;
                 self.library_open = false;
-                self.log_feedback = "Selected. Start the microphone to continue.".into();
+                self.rename_active = false;
+                self.log_feedback.clear();
                 self.status = "Ready to continue".into();
                 self.error = false;
             }
@@ -687,6 +821,8 @@ impl Drop for App {
 }
 
 mod interface;
+mod log;
+mod settings;
 
 #[cfg(test)]
 mod tests {

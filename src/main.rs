@@ -2,6 +2,7 @@
 mod app;
 mod audio;
 mod config;
+mod credentials;
 mod engine;
 mod history;
 mod i18n;

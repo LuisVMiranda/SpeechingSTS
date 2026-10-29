@@ -27,6 +27,8 @@ pub struct ChatRecord {
     pub schema_version: u8,
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub title_is_custom: bool,
     pub language: String,
     pub created_at: u64,
     pub updated_at: u64,
@@ -42,6 +44,7 @@ impl ChatRecord {
             schema_version: 1,
             id: format!("{}-{}", elapsed.as_nanos(), std::process::id()),
             title: "New conversation".into(),
+            title_is_custom: false,
             language,
             created_at: elapsed.as_secs(),
             updated_at: elapsed.as_secs(),
@@ -50,6 +53,9 @@ impl ChatRecord {
     }
 
     pub fn refresh_title(&mut self) {
+        if self.title_is_custom {
+            return;
+        }
         if let Some(message) = self
             .sessions
             .iter()
@@ -71,6 +77,20 @@ impl ChatRecord {
         } else {
             self.title = "New conversation".into();
         }
+    }
+
+    pub fn rename(&mut self, title: &str) -> Result<(), String> {
+        let title = title.trim();
+        if title.is_empty() {
+            return Err("Enter a conversation name.".into());
+        }
+        if title.chars().count() > 100 {
+            return Err("Conversation names must be at most 100 characters.".into());
+        }
+        self.title = title.to_owned();
+        self.title_is_custom = true;
+        self.updated_at = timestamp();
+        Ok(())
     }
 
     // Keep the newest messages, and preserve role order. A resumed Gemini history
@@ -160,6 +180,9 @@ impl ChatStore {
         }
         Ok(record)
     }
+    pub fn delete(&self, id: &str) -> Result<(), String> {
+        fs::remove_file(self.path(id)?).map_err(|e| format!("Could not delete conversation: {e}"))
+    }
     pub fn list(&self) -> Result<(Vec<ChatRecord>, usize), String> {
         self.ensure()?;
         let mut records = Vec::new();
@@ -228,6 +251,46 @@ mod tests {
         assert_eq!(store.list().unwrap().0.len(), 1);
         assert!(store.load("../secret").is_err());
         fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn custom_names_survive_autosave_and_delete_is_scoped() {
+        let root = std::env::temp_dir().join(format!(
+            "speeching-rename-test-{}",
+            ChatRecord::new("English".into()).id
+        ));
+        let store = ChatStore { root: root.clone() };
+        let mut first = ChatRecord::new("English".into());
+        first.sessions.push(SavedSession {
+            voice: "Aoede".into(),
+            duration_seconds: 3,
+            messages: vec![MemoryMessage {
+                speaker: Speaker::User,
+                text: "Original opening".into(),
+            }],
+        });
+        first.refresh_title();
+        first.rename("  My practice chat  ").unwrap();
+        store.save(&first).unwrap();
+        let mut restored = store.load(&first.id).unwrap();
+        restored.refresh_title();
+        assert_eq!(restored.title, "My practice chat");
+        assert!(restored.title_is_custom);
+        assert!(restored.rename("  ").is_err());
+        let second = ChatRecord::new("Spanish".into());
+        store.save(&second).unwrap();
+        assert!(store.delete("../escape").is_err());
+        store.delete(&first.id).unwrap();
+        assert!(store.load(&first.id).is_err());
+        assert!(store.load(&second.id).is_ok());
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn older_conversation_files_keep_automatic_titles() {
+        let json = r#"{"schema_version":1,"id":"1-1","title":"Old title","language":"English","created_at":1,"updated_at":1,"sessions":[{"voice":"Aoede","duration_seconds":2,"messages":[{"speaker":"User","text":"First words"}]}]}"#;
+        let mut chat: ChatRecord = serde_json::from_str(json).unwrap();
+        assert!(!chat.title_is_custom);
+        chat.refresh_title();
+        assert_eq!(chat.title, "First words");
     }
     #[test]
     fn context_is_unicode_safe_bounded_and_chronological() {

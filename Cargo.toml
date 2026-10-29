@@ -19,5 +19,8 @@ tokio = { version = "1", features = ["rt", "time", "sync", "macros", "net"] }
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 url = "2"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
+
 [patch.crates-io]
 egui-winit = { path = "vendor/egui-winit" }
