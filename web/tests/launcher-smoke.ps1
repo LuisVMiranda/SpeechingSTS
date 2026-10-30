@@ -235,7 +235,19 @@ function Test-AuthenticationChoiceWithUtf8 {
     Stop-TestLauncher $process $options.Port
 }
 
+function Assert-LocalizedLauncherOutput([string]$Output, [hashtable]$Case) {
+    $firstLine = ($Output -split "`r?`n", 2)[0].TrimEnd()
+    if (-not $firstLine.EndsWith($Case.Language) -or -not $Output.Contains($Case.Expected) -or -not $Output.Contains($Case.Intro)) {
+        throw "The $($Case.Language) setup was not localized: $Output"
+    }
+}
+
 function Test-LanguageChoice {
+    $spanish = @{ Language='ES'; Expected='Iniciando Speeching web'; Intro='Elige' }
+    $oemBom = -join @([char]0x2229, [char]0x2557, [char]0x2510)
+    foreach ($prefix in @([string][char]0xFEFF, $oemBom)) {
+        Assert-LocalizedLauncherOutput "${prefix}ES`r`nElige`r`nIniciando Speeching web" $spanish
+    }
     foreach ($case in @(
         @{ Language='ES'; Expected='Iniciando Speeching web'; Intro='Elige' },
         @{ Language='PT'; Expected='Iniciando o Speeching web'; Intro='Escolha' }
@@ -249,9 +261,7 @@ function Test-LanguageChoice {
         if ((Wait-Ready $process $options.Port).auth -ne 'off') { throw 'The localized authentication choice was not applied.' }
         Stop-TestLauncher $process $options.Port
         $output = $process.StandardOutput.ReadToEnd() + $process.StandardError.ReadToEnd()
-        if (-not $output.TrimStart().StartsWith($case.Language) -or -not $output.Contains($case.Expected) -or -not $output.Contains($case.Intro)) {
-            throw "The $($case.Language) setup was not localized: $output"
-        }
+        Assert-LocalizedLauncherOutput $output $case
     }
 }
 
