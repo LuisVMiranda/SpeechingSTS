@@ -19,7 +19,7 @@ impl App {
         let width = if self.settings.minimal {
             36.0
         } else {
-            (ui.available_width() - 132.0).clamp(100.0, 190.0)
+            (ui.available_width() - 132.0).clamp(100.0, 215.0)
         };
         let visible_label = if self.settings.minimal { "" } else { &label };
         let response = ui
@@ -80,7 +80,7 @@ impl App {
             .open_bool(&mut open)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .gap(5.0)
-            .width(280.0)
+            .width(305.0)
             .frame(
                 egui::Frame::popup(ui.style())
                     .corner_radius(12.0)
@@ -102,7 +102,7 @@ impl App {
     fn quick_chat_menu(&mut self, ui: &mut egui::Ui, choice: &mut Option<Choice>) {
         let lang = self.settings.ui_language;
         let colors = palette(self.settings.theme);
-        ui.set_min_width(260.0);
+        ui.set_min_width(285.0);
         ui.spacing_mut().item_spacing.y = 6.0;
         if ui
             .add_sized(

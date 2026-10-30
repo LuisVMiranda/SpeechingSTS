@@ -283,7 +283,7 @@ fn long_titles_leave_room_for_dates_in_the_small_picker() {
             "title={title_rect:?}, date={date_rect:?}"
         );
         assert!(
-            date_rect.max.x < 300.0 && date_rect.max.y < 330.0,
+            date_rect.max.x < 320.0 && date_rect.max.y < 330.0,
             "date={date_rect:?}"
         );
     }
