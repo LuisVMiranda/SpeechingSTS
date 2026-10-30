@@ -178,9 +178,15 @@ try {
     const dimensions = await evaluate(cdp, '({width:innerWidth,page:document.documentElement.scrollWidth})');
     if (dimensions.width !== width || dimensions.page > width) throw new Error(`${name} has horizontal overflow`);
     const micStyle = await evaluate(cdp, `(() => { const mic = document.getElementById('mic'); return { background:getComputedStyle(mic).backgroundColor, opacity:getComputedStyle(mic.querySelector('.mic-facets')).opacity }; })()`);
-    if (micStyle.background !== 'rgb(7, 87, 239)' || micStyle.opacity !== '0.2') throw new Error('Microphone does not use the logo blue and 20% facets');
+    if (micStyle.background !== 'rgb(7, 87, 239)' || micStyle.opacity !== '0.16') throw new Error('Microphone does not use the logo blue and 16% facets');
+    const rings = await evaluate(cdp, `(() => { const mic = document.getElementById('mic'); return [getComputedStyle(mic,'::before').animationName,getComputedStyle(mic,'::after').animationName]; })()`);
+    if (rings.some(name => name !== 'mic-nudge')) throw new Error('Idle microphone rings do not animate');
     await capture(cdp, name);
   }
+  await cdp.call('Emulation.setEmulatedMedia', { features:[{name:'prefers-reduced-motion',value:'reduce'}] });
+  const reducedRing = await evaluate(cdp, "getComputedStyle(document.getElementById('mic'),'::before').animationDuration");
+  if (parseFloat(reducedRing) > 0.001) throw new Error('Microphone rings ignore reduced motion');
+  await cdp.call('Emulation.setEmulatedMedia', { features:[] });
   for (const [name,width,height,mobile] of [['desktop',1200,720,false],['intermediate',820,640,false],['small',320,568,true],['mobile',390,844,true]]) {
     await cdp.call('Emulation.setDeviceMetricsOverride', { width,height,deviceScaleFactor:1,mobile });
     await cdp.call('Page.navigate', { url:`${origin}/speeching/` });
@@ -308,7 +314,8 @@ try {
     for (let i=0;i<50 && (el('hold').hidden || el('hold').disabled);i++) await wait();
     if (el('hold').hidden || el('hold').disabled) throw Error('Push-to-talk did not become ready: ' + el('notice').textContent);
     await new Promise(resolve => setTimeout(resolve,300));
-    if (getComputedStyle(el('mic')).backgroundColor !== 'rgb(166, 56, 71)' || getComputedStyle(el('mic').querySelector('.mic-facets')).opacity !== '0.2') throw Error('Active microphone lost its red state or gem texture');
+    if (getComputedStyle(el('mic')).backgroundColor !== 'rgb(166, 56, 71)' || getComputedStyle(el('mic').querySelector('.mic-facets')).opacity !== '0.16') throw Error('Active microphone lost its red state or gem texture');
+    if (getComputedStyle(el('mic'),'::before').animationName !== 'none') throw Error('Active microphone rings should not nudge');
     document.dispatchEvent(new KeyboardEvent('keydown',{key:'t',code:'KeyT',ctrlKey:true,bubbles:true,cancelable:true}));
     for (let i=0;i<50 && !el('live-messages').textContent.includes('Hello from the mock provider');i++) await wait();
     if (!el('live-messages').textContent.includes('Hello from the mock provider') || el('live-messages').querySelector('img')) throw Error('Browser audio or safe transcript failed');

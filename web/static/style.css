@@ -42,11 +42,16 @@ button svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;s
 .conversation-picker select{font-weight:600}
 .stage{text-align:center;padding:27px 20px 12px}
 .session-label{font-size:.84rem;font-weight:600;color:var(--muted)}
-.mic{position:relative;width:132px;height:132px;border:0;border-radius:50%;background:#0757ef;color:#fff;margin:28px 0 18px;box-shadow:0 0 0 8px var(--surface),0 0 0 9px #a8bce3;transition:transform .2s ease,background .2s ease,box-shadow .2s ease}
+.mic{position:relative;width:132px;height:132px;border:0;border-radius:50%;background:#0757ef;color:#fff;margin:28px 0 18px;transition:transform .2s ease,background .2s ease}
+.mic::before,.mic::after{content:"";position:absolute;border:1px solid #a8bce3;border-radius:50%;pointer-events:none}
+.mic::before{inset:-9px;animation:mic-nudge 8s ease-in-out infinite}
+.mic::after{inset:-5px;animation:mic-nudge 8s ease-in-out infinite reverse}
+.mic.active::before,.mic.active::after{border-color:#c97983;animation:none}
+@keyframes mic-nudge{0%,9%,27%,100%{transform:translateX(0)}12%{transform:translateX(3px)}15%{transform:translateX(-3px)}18%{transform:translateX(2px)}21%{transform:translateX(-1px)}24%{transform:translateX(1px)}}
 .mic:hover{transform:scale(1.04);background:#0648cc}
 .mic:active{transform:scale(.98)}
-.mic.active{background:#a63847;box-shadow:0 0 0 8px var(--surface),0 0 0 9px #c97983}
-.mic .mic-facets{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;opacity:.2;pointer-events:none}
+.mic.active{background:#a63847}
+.mic .mic-facets{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;opacity:.16;pointer-events:none}
 .mic-facets path{stroke:none}
 .mic-facets .facet-light{fill:#4a87ff}
 .mic-facets .facet-dark{fill:#0031bf}

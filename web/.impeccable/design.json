@@ -1,33 +1,84 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-29T22:05:37Z",
+  "generatedAt": "2026-10-30T04:25:44.829Z",
   "title": "Design System: Speeching",
   "extensions": {
     "colorMeta": {
-      "light-accent": { "role": "primary", "displayName": "Speeching blue" },
-      "light-surface": { "role": "neutral", "displayName": "Light surface" },
-      "dark-surface": { "role": "neutral", "displayName": "Dark surface" }
+      "light-accent": {
+        "role": "primary",
+        "displayName": "Speeching blue"
+      },
+      "light-surface": {
+        "role": "neutral",
+        "displayName": "Light surface"
+      },
+      "dark-surface": {
+        "role": "neutral",
+        "displayName": "Dark surface"
+      }
     },
     "typographyMeta": {
-      "body": { "displayName": "Interface", "purpose": "Default interface text and controls." },
-      "heading": { "displayName": "Section heading", "purpose": "Panel and section headings." },
-      "field-label": { "displayName": "Field label", "purpose": "Labels above form controls." }
+      "body": {
+        "displayName": "Interface",
+        "purpose": "Default interface text and controls."
+      },
+      "heading": {
+        "displayName": "Section heading",
+        "purpose": "Panel and section headings."
+      },
+      "field-label": {
+        "displayName": "Field label",
+        "purpose": "Labels above form controls."
+      }
     },
     "shadows": [
-      { "name": "light-panel", "value": "0 18px 50px rgba(0,0,0,.12)", "purpose": "Practice, drawer, and login surfaces in light mode." },
-      { "name": "dark-panel", "value": "0 18px 50px rgba(0,0,0,.3)", "purpose": "Practice, drawer, and login surfaces in dark mode." },
-      { "name": "microphone-ring", "value": "0 0 0 8px var(--surface), 0 0 0 9px #a8bce3", "purpose": "Ring around the idle microphone." },
-      { "name": "microphone-active-ring", "value": "0 0 0 8px var(--surface), 0 0 0 9px #c97983", "purpose": "Ring around the active microphone." },
-      { "name": "notice", "value": "0 8px 24px rgba(0,0,0,.2)", "purpose": "Floating status notice." }
+      {
+        "name": "light-panel",
+        "value": "0 18px 50px rgba(0,0,0,.12)",
+        "purpose": "Practice, drawer, and login surfaces in light mode."
+      },
+      {
+        "name": "dark-panel",
+        "value": "0 18px 50px rgba(0,0,0,.3)",
+        "purpose": "Practice, drawer, and login surfaces in dark mode."
+      },
+      {
+        "name": "notice",
+        "value": "0 8px 24px rgba(0,0,0,.2)",
+        "purpose": "Floating status notice."
+      }
     ],
     "motion": [
-      { "name": "microphone-transition", "value": "transform .2s ease, background .2s ease, box-shadow .2s ease", "purpose": "Microphone hover, press, and active changes." },
-      { "name": "waveform", "value": "wave 1.05s ease-in-out infinite alternate", "purpose": "Active waveform; the second path uses a .8s duration and -.5s delay." },
-      { "name": "reduced-motion", "value": ".01ms", "purpose": "Animation and transition durations under prefers-reduced-motion: reduce; animations run once." }
+      {
+        "name": "waveform",
+        "value": "wave 1.05s ease-in-out infinite alternate",
+        "purpose": "Active waveform; the second path uses a .8s duration and -.5s delay."
+      },
+      {
+        "name": "reduced-motion",
+        "value": ".01ms",
+        "purpose": "Animation and transition durations under prefers-reduced-motion: reduce; animations run once."
+      },
+      {
+        "name": "microphone-transition",
+        "value": "transform .2s ease, background .2s ease",
+        "purpose": "Hover, press, and active changes."
+      },
+      {
+        "name": "microphone-nudge",
+        "value": "mic-nudge 8s ease-in-out infinite",
+        "purpose": "Occasional idle ring movement; disabled during active calls and reduced motion."
+      }
     ],
     "breakpoints": [
-      { "name": "drawer-stack", "value": "800px" },
-      { "name": "compact-controls", "value": "390px" }
+      {
+        "name": "drawer-stack",
+        "value": "800px"
+      },
+      {
+        "name": "compact-controls",
+        "value": "390px"
+      }
     ]
   },
   "components": [
@@ -65,9 +116,9 @@
       "name": "Microphone",
       "kind": "button",
       "refersTo": "microphone",
-      "description": "Circular voice-session control; the active class changes the fill and ring.",
-      "html": "<button class=\"ds-mic\" type=\"button\" aria-label=\"Start conversation\"><svg viewBox=\"0 0 48 48\" aria-hidden=\"true\"><rect x=\"17\" y=\"7\" width=\"14\" height=\"24\" rx=\"7\"/><path d=\"M12 24v2a12 12 0 0 0 24 0v-2M24 38v5m-6 0h12\"/></svg></button>",
-      "css": ".ds-mic{position:relative;width:132px;height:132px;border:0;border-radius:50%;background:#2768ed;color:#fff;margin:28px 0 18px;box-shadow:0 0 0 8px var(--surface,#fff),0 0 0 9px #a8bce3;transition:transform .2s ease,background .2s ease,box-shadow .2s ease;cursor:pointer}.ds-mic svg{display:block;width:57px;height:57px;margin:auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.ds-mic:hover{transform:scale(1.04);background:#1853c8}.ds-mic:active{transform:scale(.98)}.ds-mic.active{background:#a63847;box-shadow:0 0 0 8px var(--surface,#fff),0 0 0 9px #c97983}.ds-mic:focus-visible{outline:3px solid var(--blue,#2768ed);outline-offset:3px}@media(max-width:390px){.ds-mic{width:120px;height:120px}}@media(prefers-reduced-motion:reduce){.ds-mic{transition-duration:.01ms!important}}"
+      "description": "Logo-blue microphone with 16% faceted texture and gently moving idle rings; active calls use red.",
+      "html": "<button id=\"mic\" class=\"mic\" type=\"button\" aria-label=\"Start conversation\" title=\"Start conversation\">\n            <svg class=\"mic-facets\" viewBox=\"0 0 100 100\" aria-hidden=\"true\">\n              <path class=\"facet-light\" d=\"M7.5 32 34 4 36 41Z\"/><path class=\"facet-dark\" d=\"M34 4 64 4 59 32Z\"/><path class=\"facet-light\" d=\"M64 4 91 26.5 74 51Z\"/>\n              <path class=\"facet-dark\" d=\"M64 4 74 51 59 32Z\"/><path class=\"facet-dark\" d=\"M98 55 82.5 82.5 74 51Z\"/><path class=\"facet-light\" d=\"M82.5 82.5 66.5 93 53.5 60Z\"/>\n              <path class=\"facet-dark\" d=\"M66.5 93 47 76.5 53.5 60Z\"/><path class=\"facet-light\" d=\"M66.5 93 30 94 47 76.5Z\"/><path class=\"facet-light\" d=\"M15 66.5 36 41 47 76.5Z\"/>\n              <path class=\"facet-dark\" d=\"M15 66.5 7.5 32 36 41Z\"/><path class=\"facet-dark\" d=\"M36 41 53.5 60 47 76.5Z\"/><path class=\"facet-light\" d=\"M59 32 74 51 53.5 60Z\"/>\n            </svg>\n            <svg class=\"mic-icon\" viewBox=\"0 0 48 48\" aria-hidden=\"true\"><rect x=\"17\" y=\"7\" width=\"14\" height=\"24\" rx=\"7\"/><path d=\"M12 24v2a12 12 0 0 0 24 0v-2M24 38v5m-6 0h12\"/></svg>\n          </button>",
+      "css": "button svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}\r\n.mic{position:relative;width:132px;height:132px;border:0;border-radius:50%;background:#0757ef;color:#fff;margin:28px 0 18px;transition:transform .2s ease,background .2s ease}\r\n.mic::before,.mic::after{content:\"\";position:absolute;border:1px solid #a8bce3;border-radius:50%;pointer-events:none}\r\n.mic::before{inset:-9px;animation:mic-nudge 8s ease-in-out infinite}\r\n.mic::after{inset:-5px;animation:mic-nudge 8s ease-in-out infinite reverse}\r\n.mic.active::before,.mic.active::after{border-color:#c97983;animation:none}\r\n@keyframes mic-nudge{0%,9%,27%,100%{transform:translateX(0)}12%{transform:translateX(3px)}15%{transform:translateX(-3px)}18%{transform:translateX(2px)}21%{transform:translateX(-1px)}24%{transform:translateX(1px)}}\r\n.mic:hover{transform:scale(1.04);background:#0648cc}\r\n.mic:active{transform:scale(.98)}\r\n.mic.active{background:#a63847}\r\n.mic .mic-facets{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;opacity:.16;pointer-events:none}\r\n.mic-facets path{stroke:none}\r\n.mic-facets .facet-light{fill:#4a87ff}\r\n.mic-facets .facet-dark{fill:#0031bf}\r\n.mic.active .facet-light{fill:#e3818f}\r\n.mic.active .facet-dark{fill:#77192a}\r\n.mic .mic-icon{position:relative;width:57px;height:57px;margin:auto;stroke-width:2}\r\n.mic{width:120px;height:120px}\r"
     },
     {
       "name": "Transcript message",
@@ -101,8 +152,16 @@
       "Dense, readable controls with visible focus and reduced-motion support."
     ],
     "rules": [
-      { "name": "The Theme Roles Rule", "body": "Use the matching page, surface, ink, muted, line, accent, and soft colors together for each theme.", "section": "colors" },
-      { "name": "The Visible Focus Rule", "body": "Buttons, inputs, and selects show a 3px theme-accent outline with a 3px offset on keyboard focus.", "section": "components" }
+      {
+        "name": "The Theme Roles Rule",
+        "body": "Use the matching page, surface, ink, muted, line, accent, and soft colors together for each theme.",
+        "section": "colors"
+      },
+      {
+        "name": "The Visible Focus Rule",
+        "body": "Buttons, inputs, and selects show a 3px theme-accent outline with a 3px offset on keyboard focus.",
+        "section": "components"
+      }
     ],
     "dos": [
       "Do pair light and dark theme roles for surfaces, text, dividers, and secondary accents.",

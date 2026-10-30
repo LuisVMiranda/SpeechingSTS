@@ -1,7 +1,7 @@
 use eframe::egui::{Color32, Mesh, Painter, Pos2};
 
 pub(super) const LOGO_BLUE: Color32 = Color32::from_rgb(7, 87, 239);
-const FACET_ALPHA: u8 = 51;
+const FACET_ALPHA: u8 = 41;
 // An irregular faceted surface, mirrored by the web microphone SVG.
 const POINTS: [(f32, f32); 14] = [
     (-0.85, -0.36),
@@ -67,7 +67,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gem_facets_are_inside_the_disc_and_twenty_percent_opaque() {
+    fn gem_facets_are_inside_the_disc_and_sixteen_percent_opaque() {
         let center = Pos2::new(125.0, 80.0);
         let radius = 60.0;
         for active in [false, true] {
@@ -79,7 +79,7 @@ mod tests {
                 .all(|index| (*index as usize) < mesh.vertices.len()));
             for vertex in &mesh.vertices {
                 assert!(vertex.pos.distance(center) <= radius + 0.001);
-                assert_eq!(vertex.color.a(), 51);
+                assert_eq!(vertex.color.a(), 41);
             }
         }
         assert_eq!(LOGO_BLUE.to_array(), [7, 87, 239, 255]);

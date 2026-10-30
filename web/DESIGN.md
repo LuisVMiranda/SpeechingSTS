@@ -110,7 +110,7 @@ components:
 
 ## Colors
 
-Blue identifies the microphone, primary actions, focus, and interactive emphasis. Cool neutral surfaces and text change with the selected theme. The microphone uses the logo's blue in both themes, with a subtle faceted texture at 20% opacity; the waveform and primary buttons retain the fixed light-accent blue. Secondary accents use theme-specific tokens. The active microphone changes to the recorded red.
+Blue identifies the microphone, primary actions, focus, and interactive emphasis. Cool neutral surfaces and text change with the selected theme. The microphone uses the logo's blue in both themes, with a subtle faceted texture at 16% opacity; the waveform and primary buttons retain the fixed light-accent blue. Secondary accents use theme-specific tokens. The active microphone changes to the recorded red.
 
 **The Theme Roles Rule.** Use the matching page, surface, ink, muted, line, accent, and soft colors together for each theme.
 
@@ -136,7 +136,7 @@ Panels have rounded corners, inputs and buttons use smaller radii, and the micro
 
 ## Components
 
-- **Microphone:** A logo-blue circular button with subtle 20% gem facets, a white outlined icon, and a double ring. Hover enlarges it slightly and darkens the blue; press slightly shrinks it. The active state changes its fill and outer ring to red. Its transition lasts 0.2 seconds.
+- **Microphone:** A logo-blue circular button with subtle 16% gem facets, a white outlined icon, and a double ring. The rings gently shake occasionally while idle, respecting reduced-motion preferences. Hover enlarges the button slightly and darkens the blue; press slightly shrinks it. The active state changes its fill and outer ring to red. Its transition lasts 0.2 seconds.
 - **Buttons:** Primary buttons have a blue fill and white text. Utility buttons are bordered squares, while secondary actions use quiet bordered or text-only treatments. Disabled buttons reduce opacity.
 - **Fields:** Inputs and selects use the current surface, ink, and border colors, with a minimum height of 42px. Labels sit above their controls.
 - **Transcript:** Assistant messages use the soft theme fill; user messages use a transparent fill and a thin border. Both share rounded corners and wrap long content.
