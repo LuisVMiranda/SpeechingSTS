@@ -4,7 +4,7 @@ Speeching is a small native Windows app for spoken language practice. The Rust a
 
 ## Start
 
-1. Double-click `speeching.exe` (or `start.vbs`). The executable opens without a terminal.
+1. Build the Windows app as described below, then double-click `speeching.exe` (or `start.vbs`). The executable opens without a terminal.
 2. Open **Settings** using the sliders icon. In **Provider**, choose a provider and paste its API key. In **Practice**, choose your language, level and voice, then save.
 3. Press the large microphone to start or end a conversation. While connected, the small microphone in the top bar mutes or unmutes you. Headphones are recommended; the native app does not provide acoustic echo cancellation.
 
@@ -43,6 +43,6 @@ For Gemini, the default model is `gemini-3.8-live`. The app requests session res
 
 ## Build from source
 
-Install the current Rust toolchain and Windows build tools, then run `cargo test --locked` and `cargo build --release --locked`. The executable is produced at `target\release\speeching.exe`. To replace the ready-to-run copy, copy that executable to the project root. The original browser project is preserved in `legacy-web/`.
+Install the current Rust toolchain and Windows build tools, then run `cargo test --locked` and `cargo build --release --locked`. The executable is produced at `target\release\speeching.exe`. Copy it to the project root to use `start.vbs` or `start.cmd`; the root executable is ignored by Git. The original browser project is preserved in `legacy-web/`.
 
 The project includes a small patched copy of `egui-winit` under `vendor/` so Windows respects the no-shadow setting on the transparent bubble window. It remains under the upstream MIT license.

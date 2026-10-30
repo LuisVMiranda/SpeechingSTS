@@ -1,4 +1,5 @@
 /target/
+/speeching.exe
 /conversations/
 /speeching-web-data/
 node_modules/
