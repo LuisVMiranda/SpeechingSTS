@@ -18,7 +18,7 @@ const voiceTones = {
   pt:['Leve','Animada','Firme','Brilhante','Informativa','Entusiasmada','Jovem','Firme','Descontraída','Brilhante','Soprosa','Clara','Descontraída','Suave','Suave','Clara','Áspera','Informativa','Animada','Macia','Firme','Equilibrada','Madura','Direta','Amigável','Casual','Gentil','Viva','Experiente','Acolhedora'],
 };
 let settings = { ...defaults }, user = null, mode = '', chatList = [], selectedLog = null, audio = null, timer = null, startTime = 0, minimal = false;
-let lastMessage = null, activeChat = '', soundTimer = null, identityEpoch = 0, chatSequence = 0, logSequence = 0, searchTimer = null, moreChats = false, chatRevision = 0;
+let lastMessage = null, activeChat = '', soundTimer = null, identityEpoch = 0, chatSequence = 0, logSequence = 0, selectionRevision = 0, searchTimer = null, moreChats = false, chatRevision = 0;
 let shortcutHeld = false;
 let authUi;
 const liveMessagesById = new Map();
@@ -116,7 +116,7 @@ function renderChats() {
     const button = document.createElement('button'); button.type = 'button'; button.classList.toggle('selected', selectedLog?.id === chat.id);
     const title = document.createElement('strong'); title.textContent = chat.title;
     const meta = document.createElement('span'); meta.className = 'meta'; meta.textContent = `${displayLanguage(chat.language)} · ${timestamp(chat.updated_at)} · ${duration(chat.duration_seconds)}`;
-    button.append(title, meta); button.addEventListener('click', () => showLog(chat)); row.append(button); list.append(row);
+    button.append(title, meta); button.addEventListener('click', () => selectConversation(chat.id, true)); row.append(button); list.append(row);
   }
 }
 async function refreshChats(append = false) {
@@ -132,18 +132,37 @@ function messageNode(message) {
   const body = document.createElement('span'); body.textContent = message.text;
   node.append(label, body); return node;
 }
-async function showLog(chat) {
+function clearLog() {
+  logSequence++; selectedLog = null; $('log').hidden = true;
+  $('log-title').textContent = ''; $('log-duration').textContent = ''; $('log-messages').replaceChildren();
+  $('more-messages').hidden = true; $('more-messages').disabled = false; renderChats();
+}
+function resetLiveMessages() {
+  liveMessagesById.clear(); lastMessage = null;
+  const empty = document.createElement('p'); empty.className = 'empty'; empty.dataset.i18n = 'transcriptEmpty'; empty.textContent = text('transcriptEmpty');
+  $('live-messages').replaceChildren(empty);
+}
+function selectConversation(id, reveal = false) {
+  selectionRevision++;
+  if (!audio) { $('chat-select').value = id; activeChat = ''; resetLiveMessages(); }
+  if (id) showLog({ id }, reveal); else clearLog();
+}
+async function showLog(chat, reveal = false) {
   if (!chat) return;
-  const epoch = identityEpoch, sequence = ++logSequence;
+  clearLog();
+  const epoch = identityEpoch, sequence = logSequence;
   try {
     const result = await api(`/api/chats/${encodeURIComponent(chat.id)}`);
     if (epoch !== identityEpoch || sequence !== logSequence) return;
-    selectedLog = { ...result.chat, messages:result.messages, more:result.more, revision:result.revision }; $('log').hidden = false;
+    selectedLog = { ...result.chat, messages:result.messages, more:result.more, revision:result.revision }; $('log').hidden = minimal;
     $('log-title').textContent = selectedLog.title; $('log-duration').textContent = duration(selectedLog.duration_seconds);
     $('log-messages').replaceChildren(...result.messages.filter(message => message.text.trim()).map(messageNode));
-    $('more-messages').hidden = !result.more;
-    $('chat-select').value = chat.id; renderChats();
-  } catch (error) { if (epoch === identityEpoch) notify(error.message); }
+    $('more-messages').hidden = !result.more; $('delete').disabled = Boolean(audio); renderChats();
+    if (reveal && !minimal) {
+      $('log').scrollIntoView({ behavior:'auto', block:innerWidth <= 800 ? 'start' : 'nearest' });
+      $('log-title').focus({ preventScroll:true });
+    }
+  } catch (error) { if (epoch === identityEpoch && sequence === logSequence) notify(error.message); }
 }
 async function completeLog() {
   const epoch = identityEpoch, current = selectedLog;
@@ -158,12 +177,15 @@ async function completeLog() {
 }
 async function loadEarlier() {
   const current = selectedLog, epoch = identityEpoch;
+  if (!current || $('more-messages').disabled) return;
+  $('more-messages').disabled = true;
   try {
     const page = await api(`/api/chats/${encodeURIComponent(current.id)}?offset=${current.messages.length}&revision=${current.revision}`);
     if (epoch !== identityEpoch || selectedLog !== current) return;
     current.messages = [...page.messages, ...current.messages]; current.more = page.more;
     $('log-messages').prepend(...page.messages.filter(message => message.text.trim()).map(messageNode)); $('more-messages').hidden = !page.more;
   } catch (error) { if (epoch !== identityEpoch || selectedLog !== current) return; if (error.status === 409) { await showLog(current); notify(text('historyChanged')); } else notify(error.message); }
+  finally { if (selectedLog === current) $('more-messages').disabled = false; }
 }
 async function exportError(error, fallback) {
   if (error.status === 409 && selectedLog) { await showLog(selectedLog); notify(text('historyChanged')); return; }
@@ -201,15 +223,19 @@ function liveMessage(event) {
   if (event.type === 'error') notify(providerErrors.has(event.code) ? text(event.code) : event.message);
 }
 function closed() {
-  const epoch = identityEpoch;
+  const epoch = identityEpoch, endedChat = activeChat, selectionAtClose = selectionRevision;
+  const refreshVisibleLog = Boolean(endedChat && selectedLog?.id === endedChat);
+  logSequence++;
+  if (endedChat && selectedLog && !refreshVisibleLog) clearLog();
   setTalk(false);
   audio = null; clearInterval(timer); $('mic').classList.remove('active'); $('mic').setAttribute('aria-label', text('start')); $('hint').textContent = text('startHint'); $('hold').hidden = true;
-  $('chat-select').disabled = false; setStatus('finished');
+  $('chat-select').disabled = false; $('delete').disabled = false; setStatus('finished');
   refreshChats().then(() => {
-    if (epoch !== identityEpoch || !activeChat) return;
-    if (![...$('chat-select').options].some(option => option.value === activeChat)) $('chat-select').add(new Option(text('currentConversation'), activeChat));
-    $('chat-select').value = activeChat;
-    if (settings.auto_open_log) { setPanel('history', true); showLog({ id:activeChat }); }
+    if (epoch !== identityEpoch || selectionAtClose !== selectionRevision || !endedChat || audio) return;
+    if (![...$('chat-select').options].some(option => option.value === endedChat)) $('chat-select').add(new Option(text('currentConversation'), endedChat));
+    $('chat-select').value = endedChat;
+    if (settings.auto_open_log) { setPanel('history', true); showLog({ id:endedChat }); }
+    else if (refreshVisibleLog) showLog({ id:endedChat });
   });
 }
 async function toggleMic() {
@@ -225,7 +251,7 @@ async function toggleMic() {
   $('live-messages').replaceChildren(); liveMessagesById.clear(); lastMessage = null; activeChat = ''; $('timer').textContent = '00:00'; setStatus('connecting');
   const epoch = identityEpoch;
   const session = new AudioSession({ message:event => { if (epoch === identityEpoch) liveMessage(event); }, closed:() => { if (audio === session && epoch === identityEpoch) closed(); }, error:message => { if (epoch === identityEpoch) notify(message); }, level:rms => { if (epoch === identityEpoch && rms > .008) pulse(); }, speaking:() => { if (epoch === identityEpoch) { setStatus('speaking'); pulse(); } }, listening:() => { if (epoch === identityEpoch && audio === session) { setStatus('listening'); $('wave').classList.remove('active'); } } });
-  audio = session;
+  audio = session; $('delete').disabled = true;
   try { await session.start({ ...settings, chat_id:$('chat-select').value || null }); $('hold').hidden = settings.input_mode !== 'push'; }
   catch { session.cleanup(); if (audio === session) closed(); if (!session.cancelled) notify(text('micFailed')); }
 }
@@ -266,6 +292,7 @@ function bindEvents() {
     $('shortcut').value = shortcutName(event);
   });
   $('mic').addEventListener('click', toggleMic);
+  $('chat-select').addEventListener('change', () => selectConversation($('chat-select').value));
   $('hold').addEventListener('pointerdown', event => { event.preventDefault(); $('hold').setPointerCapture(event.pointerId); setTalk(true); });
   for (const kind of ['pointerup','pointercancel','lostpointercapture']) $('hold').addEventListener(kind, () => setTalk(false));
   $('hold').addEventListener('keydown', event => {
@@ -289,7 +316,7 @@ function bindEvents() {
     event.preventDefault(); shortcutHeld = false; setTalk(false);
   });
   window.addEventListener('blur', () => { if (shortcutHeld) { shortcutHeld = false; setTalk(false); } });
-  $('minimal').addEventListener('click', () => { minimal = !minimal; $('live-messages').hidden = minimal; $('minimal').textContent = text(minimal ? 'showText' : 'hideText'); });
+  $('minimal').addEventListener('click', () => { minimal = !minimal; $('live-messages').hidden = minimal; $('log').hidden = minimal || !selectedLog; $('minimal').textContent = text(minimal ? 'showText' : 'hideText'); });
   $('search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => refreshChats(), 200); });
   $('sort').addEventListener('change', () => refreshChats());
   $('more-chats').addEventListener('click', () => refreshChats(true)); $('more-messages').addEventListener('click', loadEarlier);
@@ -301,10 +328,10 @@ function bindEvents() {
   });
   $('delete').addEventListener('click', async () => {
     const current = selectedLog, epoch = identityEpoch; if (!confirm(text('deleteConfirm'))) return;
-    try { await api(`/api/chats/${encodeURIComponent(current.id)}`, { method:'DELETE' }); if (epoch !== identityEpoch || selectedLog !== current) return; if ($('chat-select').value === current.id) $('chat-select').value = ''; selectedLog = null; $('log').hidden = true; await refreshChats(); } catch (error) { if (epoch === identityEpoch) notify(error.message); }
+    try { await api(`/api/chats/${encodeURIComponent(current.id)}`, { method:'DELETE' }); if (epoch !== identityEpoch || selectedLog !== current) return; if ($('chat-select').value === current.id) { selectionRevision++; $('chat-select').value = ''; activeChat = ''; resetLiveMessages(); } clearLog(); await refreshChats(); } catch (error) { if (epoch === identityEpoch) notify(error.message); }
   });
   $('logout').addEventListener('click', async () => {
-    identityEpoch++;
+    identityEpoch++; selectionRevision++; logSequence++;
     if (audio) { audio.stop(); audio = null; }
     clearInterval(timer); clearTimeout(soundTimer); $('wave').classList.remove('active'); $('mic').classList.remove('active'); $('hold').hidden = true; $('chat-select').disabled = false;
     try {

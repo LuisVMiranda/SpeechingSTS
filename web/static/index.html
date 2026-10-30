@@ -47,15 +47,24 @@
     </section>
 
     <div id="workspace" class="workspace" hidden>
+      <div class="practice-column">
       <section class="practice" aria-labelledby="practice-title">
         <div class="conversation-picker">
           <label for="chat-select" data-i18n="conversation">Conversation</label>
-          <select id="chat-select"><option value="" data-i18n="newConversation">New conversation</option></select>
+          <select id="chat-select" aria-controls="log"><option value="" data-i18n="newConversation">New conversation</option></select>
         </div>
         <div class="stage">
           <h1 id="practice-title" class="sr-only" data-i18n="practice">Language practice</h1>
           <p class="session-label"><span id="practice-language">Spanish</span><span aria-hidden="true"> · </span><span data-i18n="partner">AI partner</span></p>
-          <button id="mic" class="mic" type="button" aria-label="Start conversation" title="Start conversation"><svg viewBox="0 0 48 48" aria-hidden="true"><rect x="17" y="7" width="14" height="24" rx="7"/><path d="M12 24v2a12 12 0 0 0 24 0v-2M24 38v5m-6 0h12"/></svg></button>
+          <button id="mic" class="mic" type="button" aria-label="Start conversation" title="Start conversation">
+            <svg class="mic-facets" viewBox="0 0 100 100" aria-hidden="true">
+              <path class="facet-light" d="M7.5 32 34 4 36 41Z"/><path class="facet-dark" d="M34 4 64 4 59 32Z"/><path class="facet-light" d="M64 4 91 26.5 74 51Z"/>
+              <path class="facet-dark" d="M64 4 74 51 59 32Z"/><path class="facet-dark" d="M98 55 82.5 82.5 74 51Z"/><path class="facet-light" d="M82.5 82.5 66.5 93 53.5 60Z"/>
+              <path class="facet-dark" d="M66.5 93 47 76.5 53.5 60Z"/><path class="facet-light" d="M66.5 93 30 94 47 76.5Z"/><path class="facet-light" d="M15 66.5 36 41 47 76.5Z"/>
+              <path class="facet-dark" d="M15 66.5 7.5 32 36 41Z"/><path class="facet-dark" d="M36 41 53.5 60 47 76.5Z"/><path class="facet-light" d="M59 32 74 51 53.5 60Z"/>
+            </svg>
+            <svg class="mic-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="17" y="7" width="14" height="24" rx="7"/><path d="M12 24v2a12 12 0 0 0 24 0v-2M24 38v5m-6 0h12"/></svg>
+          </button>
           <p class="status" id="status" role="status" data-i18n="ready">Ready when you are</p>
           <p class="timer" id="timer" aria-label="Conversation duration" data-aria="conversationDuration">00:00</p>
           <svg class="wave" id="wave" viewBox="0 0 240 42" aria-hidden="true"><path class="wave-one" d="M2 21c12 0 15-6 24-6s12 12 21 12 11-20 20-20 11 28 20 28 12-25 22-25 11 22 20 22 11-18 20-18 12 12 21 12 11-8 20-8 11 3 19 3h29"/><path class="wave-two" d="M2 21c12 0 15 5 24 5s12-10 21-10 11 16 20 16 11-22 20-22 12 23 22 23 11-22 20-22 11 16 20 16 12-10 21-10 11 7 20 7 11-3 19-3h29"/></svg>
@@ -65,13 +74,14 @@
         </div>
         <section class="transcript" aria-label="Live transcript" data-aria="liveTranscript"><div class="section-line"><h2 data-i18n="liveTranscript">Live transcript</h2><button id="minimal" class="text-button" type="button" data-i18n="hideText">Hide text</button></div><div id="live-messages" class="live-messages"><p class="empty" data-i18n="transcriptEmpty">Your conversation will appear here as you speak.</p></div></section>
       </section>
+      <section class="log" id="log" aria-labelledby="log-title" hidden><div class="section-line"><h2 id="log-title" tabindex="-1"></h2><span id="log-duration" class="meta"></span></div><button id="more-messages" class="text-button" type="button" data-i18n="moreMessages" hidden>Load earlier messages</button><div id="log-messages" class="log-messages"></div><div class="log-actions"><button id="copy" class="quiet" data-i18n="copy">Copy</button><button id="download" class="quiet" data-i18n="download">Download</button><button id="rename" class="quiet" data-i18n="rename">Rename</button><button id="delete" class="quiet danger" data-i18n="delete">Delete</button></div></section>
+      </div>
 
       <aside class="drawer" id="history-panel" aria-labelledby="history-title" hidden>
         <div class="panel-heading"><div><h2 id="history-title" tabindex="-1" data-i18n="history">Conversations</h2><p data-i18n="historyIntro">Pick up where you left off.</p></div><button class="close icon-button" data-close="history" data-aria="closeHistory" aria-label="Close history" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
         <div class="history-tools"><input id="search" type="search" data-aria="search" aria-label="Search conversations" data-placeholder="search" placeholder="Search conversations"><select id="sort" aria-label="Sort conversations" data-aria="sortConversations"><option value="newest" data-i18n="newest">Newest first</option><option value="oldest" data-i18n="oldest">Oldest first</option><option value="title" data-i18n="alphabetical">Name A–Z</option></select></div>
         <div id="chat-list" class="chat-list"></div>
         <button id="more-chats" class="text-button" type="button" data-i18n="moreChats" hidden>Load more conversations</button>
-        <div class="log" id="log" hidden><div class="section-line"><h3 id="log-title"></h3><span id="log-duration" class="meta"></span></div><button id="more-messages" class="text-button" type="button" data-i18n="moreMessages" hidden>Load earlier messages</button><div id="log-messages" class="log-messages"></div><div class="log-actions"><button id="copy" class="quiet" data-i18n="copy">Copy</button><button id="download" class="quiet" data-i18n="download">Download</button><button id="rename" class="quiet" data-i18n="rename">Rename</button><button id="delete" class="quiet danger" data-i18n="delete">Delete</button></div></div>
       </aside>
 
       <aside class="drawer" id="settings-panel" aria-labelledby="settings-title" hidden>

@@ -1,4 +1,5 @@
 use super::interface_helpers::{icon_button, paint_bubbles, wave_envelope, BubbleStyle, Icon};
+use super::microphone_art::{paint_facets, LOGO_BLUE};
 use super::*;
 use eframe::egui::{
     Align, Layout, Pos2, Rect, RichText, Sense, Stroke, Vec2, ViewportBuilder, ViewportId,
@@ -150,6 +151,7 @@ impl App {
             Stroke::new(1.0_f32, inner),
         );
         p.circle_filled(center, radius, fill);
+        paint_facets(&p, center, radius, active);
         let white = Color32::WHITE;
         let line = Stroke::new(2.6_f32, white);
         p.rect_filled(
@@ -519,8 +521,8 @@ fn microphone_colors(active: bool, hovered: bool) -> (Color32, Color32, Color32)
     let fill = match (active, hovered) {
         (true, true) => Color32::from_rgb(119, 39, 48),
         (true, false) => Color32::from_rgb(147, 48, 58),
-        (false, true) => Color32::from_rgb(29, 83, 198),
-        (false, false) => BLUE,
+        (false, true) => Color32::from_rgb(6, 72, 204),
+        (false, false) => LOGO_BLUE,
     };
     (outer, inner, fill)
 }

@@ -17,6 +17,8 @@ const executable = process.env.SPEECHING_TEST_EXE || path.join(project, 'target'
 const chromePath = process.env.CHROME || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : 'google-chrome');
 const screenshots = process.env.SPEECHING_SCREENSHOT_DIR;
 let chrome, service, devtools, proxy, mock, audioChunks = 0, preferenceSeen = false, rejectNextSetup = false;
+const historyDelays = new Map();
+let chatListDelay = 0;
 const connections = new Set();
 
 function track(socket) { connections.add(socket); socket.on('close', () => connections.delete(socket)); socket.on('error', () => socket.destroy()); }
@@ -82,7 +84,13 @@ function createMock() {
 function createProxy(servicePort) {
   const server = http.createServer((request, response) => {
     const suffix = request.url.startsWith('/speeching/') ? request.url.slice('/speeching'.length) : request.url;
-    const upstream = http.request({ hostname:'127.0.0.1', port:servicePort, path:suffix, method:request.method, headers:request.headers }, result => { response.writeHead(result.statusCode, result.headers); result.pipe(response); });
+    const upstream = http.request({ hostname:'127.0.0.1', port:servicePort, path:suffix, method:request.method, headers:request.headers }, result => {
+      const route = suffix.split('?')[0];
+      const id = route.startsWith('/api/chats/') ? decodeURIComponent(route.slice('/api/chats/'.length)) : '';
+      const delayMs = request.method === 'GET' ? (id ? historyDelays.get(id) || 0 : route === '/api/chats' ? chatListDelay : 0) : 0;
+      const send = () => { if (response.destroyed) { result.resume(); return; } response.writeHead(result.statusCode, result.headers); result.pipe(response); };
+      if (delayMs) setTimeout(send, delayMs); else send();
+    });
     upstream.on('error', () => response.writeHead(502).end());
     // Exercise a slower key save rather than relying on a fast local round trip.
     if (request.method === 'POST' && suffix.startsWith('/api/keys/')) setTimeout(() => request.pipe(upstream), 350);
@@ -108,6 +116,11 @@ function seedHistory(dataDir) {
   const owner = createHash('sha256').update('off\0guest').digest('base64url');
   db.prepare("INSERT INTO chats(id,owner,title,language,created_at,updated_at,duration) VALUES(?,?,?,?,?,?,?)").run('synthetic-chat', owner, 'A walk through Madrid', 'Spanish', 1700000000, 1700000000, 145);
   db.prepare('INSERT INTO messages(chat_id,speaker,text) VALUES(?,?,?)').run('synthetic-chat', 'user', '<img src=x onerror=alert(1)> What is Madrid like?');
+  db.prepare("INSERT INTO chats(id,owner,title,language,created_at,updated_at,duration) VALUES(?,?,?,?,?,?,?)").run('synthetic-other', owner, 'Another conversation', 'Spanish', 1690000000, 1690000000, 80);
+  const insert = db.prepare('INSERT INTO messages(chat_id,speaker,text) VALUES(?,?,?)');
+  for (let index = 0; index < 102; index++) insert.run('synthetic-other', 'user', `Earlier practice message ${index}`);
+  db.prepare("INSERT INTO chats(id,owner,title,language,created_at,updated_at,duration) VALUES(?,?,?,?,?,?,?)").run('synthetic-temporary', owner, 'Temporary practice', 'Spanish', 1680000000, 1680000000, 20);
+  insert.run('synthetic-temporary', 'user', 'Temporary message');
   db.close();
 }
 async function connectDevtools(port) {
@@ -164,6 +177,8 @@ try {
     await waitFor(() => evaluate(cdp, "document.readyState === 'complete' && document.getElementById('workspace')?.hidden === false"), 'Practice view did not load');
     const dimensions = await evaluate(cdp, '({width:innerWidth,page:document.documentElement.scrollWidth})');
     if (dimensions.width !== width || dimensions.page > width) throw new Error(`${name} has horizontal overflow`);
+    const micStyle = await evaluate(cdp, `(() => { const mic = document.getElementById('mic'); return { background:getComputedStyle(mic).backgroundColor, opacity:getComputedStyle(mic.querySelector('.mic-facets')).opacity }; })()`);
+    if (micStyle.background !== 'rgb(7, 87, 239)' || micStyle.opacity !== '0.2') throw new Error('Microphone does not use the logo blue and 20% facets');
     await capture(cdp, name);
   }
   for (const [name,width,height,mobile] of [['desktop',1200,720,false],['intermediate',820,640,false],['small',320,568,true],['mobile',390,844,true]]) {
@@ -205,6 +220,68 @@ try {
       if (document.querySelector('.site-footer').getBoundingClientRect().bottom > innerHeight + 1) throw Error('Page scrolling did not reach the footer');
     })()`);
   }
+  await evaluate(cdp, "document.getElementById('settings-toggle').click()");
+  await waitFor(() => evaluate(cdp, "document.getElementById('chat-select').options.length >= 4"), 'Saved conversations did not load');
+  await evaluate(cdp, `(async () => {
+    const wait = () => new Promise(resolve => setTimeout(resolve,100)); const el = id => document.getElementById(id);
+    const picker = el('chat-select'); picker.value = 'synthetic-chat'; picker.dispatchEvent(new Event('change', {bubbles:true}));
+    for (let i=0;i<100 && el('log').hidden;i++) await wait();
+    if (el('log').hidden || !el('history-panel').hidden || !el('log-messages').textContent.includes('What is Madrid like?')) throw Error('Picker did not reveal the saved log without opening history');
+    if (el('log-messages').querySelector('img') || el('log').getBoundingClientRect().top < document.querySelector('.practice').getBoundingClientRect().bottom) throw Error('Saved log is unsafe or not beneath practice');
+    el('minimal').click(); if (!el('log').hidden) throw Error('Hidden text mode revealed the saved log');
+    el('minimal').click(); if (el('log').hidden) throw Error('Saved log did not return after showing text');
+  })()`);
+  await cdp.call('Emulation.setDeviceMetricsOverride', { width:1200,height:900,deviceScaleFactor:1,mobile:false });
+  await evaluate(cdp, "document.getElementById('log').scrollIntoView({block:'end'})");
+  await capture(cdp, 'desktop-selected-log');
+  await cdp.call('Emulation.setDeviceMetricsOverride', { width:390,height:844,deviceScaleFactor:1,mobile:true });
+  await evaluate(cdp, "document.getElementById('log').scrollIntoView({block:'start'})");
+  await capture(cdp, 'mobile-selected-log');
+  historyDelays.set('synthetic-chat', 700);
+  await evaluate(cdp, `(async () => {
+    const wait = () => new Promise(resolve => setTimeout(resolve,100)); const el = id => document.getElementById(id); const picker = el('chat-select');
+    picker.value = 'synthetic-chat'; picker.dispatchEvent(new Event('change', {bubbles:true}));
+    await wait(); picker.value = 'synthetic-other'; picker.dispatchEvent(new Event('change', {bubbles:true}));
+    for (let i=0;i<100 && el('log-title').textContent !== 'Another conversation';i++) await wait();
+    await new Promise(resolve => setTimeout(resolve,900));
+    if (picker.value !== 'synthetic-other' || el('log-title').textContent !== 'Another conversation') throw Error('A delayed log replaced the newer selection');
+    if (el('more-messages').hidden) throw Error('Older messages were not offered');
+    el('more-messages').click(); el('more-messages').click();
+    for (let i=0;i<100 && el('log-messages').children.length < 102;i++) await wait();
+    if (el('log-messages').children.length !== 102 || !el('more-messages').hidden) throw Error('Saved-message paging duplicated or lost messages');
+    Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText:async value => { window.copiedLog = value; }}});
+    el('copy').click(); for (let i=0;i<100 && !window.copiedLog;i++) await wait();
+    if (!window.copiedLog.includes('Earlier practice message 0') || !window.copiedLog.includes('Earlier practice message 101')) throw Error('Copy omitted saved messages');
+    const oldCreate = URL.createObjectURL, oldRevoke = URL.revokeObjectURL, oldClick = HTMLAnchorElement.prototype.click;
+    try {
+      URL.createObjectURL = blob => { window.downloadedLog = blob; return 'blob:speeching-test'; }; URL.revokeObjectURL = () => {};
+      HTMLAnchorElement.prototype.click = function() { window.downloadName = this.download; };
+      el('download').click(); for (let i=0;i<100 && !window.downloadedLog;i++) await wait();
+      const content = await window.downloadedLog.text();
+      if (window.downloadName !== 'speeching-conversation.txt' || !content.includes('Earlier practice message 0') || !content.includes('Earlier practice message 101')) throw Error('Download omitted saved messages');
+    } finally { URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke; HTMLAnchorElement.prototype.click = oldClick; }
+    picker.value = 'synthetic-chat'; picker.dispatchEvent(new Event('change', {bubbles:true}));
+    await wait(); picker.value = ''; picker.dispatchEvent(new Event('change', {bubbles:true}));
+    await new Promise(resolve => setTimeout(resolve,900));
+    if (picker.value || !el('log').hidden || el('log-messages').children.length) throw Error('A stale log appeared after starting a new conversation');
+  })()`);
+  historyDelays.clear();
+  await evaluate(cdp, `(async () => {
+    const wait = () => new Promise(resolve => setTimeout(resolve,100)); const el = id => document.getElementById(id); const picker = el('chat-select');
+    picker.value = 'synthetic-temporary'; picker.dispatchEvent(new Event('change', {bubbles:true}));
+    for (let i=0;i<100 && el('log-title').textContent !== 'Temporary practice';i++) await wait();
+    const oldPrompt = window.prompt, oldConfirm = window.confirm;
+    try {
+      window.prompt = () => 'Renamed practice'; el('rename').click();
+      for (let i=0;i<100 && el('log-title').textContent !== 'Renamed practice';i++) await wait();
+      if (el('log-title').textContent !== 'Renamed practice') throw Error('Rename failed after moving the log');
+      window.confirm = () => false; el('delete').click(); await wait();
+      if (el('log').hidden) throw Error('Canceling deletion removed the log');
+      window.confirm = () => true; el('delete').click();
+      for (let i=0;i<100 && !el('log').hidden;i++) await wait();
+      if (!el('log').hidden || picker.value) throw Error('Deleting the selected log did not reset the picker');
+    } finally { window.prompt = oldPrompt; window.confirm = oldConfirm; }
+  })()`);
   await evaluate(cdp, `(async () => {
     const wait = () => new Promise(resolve => setTimeout(resolve,200)); const el = id => document.getElementById(id);
     el('history-toggle').click(); await wait();
@@ -230,9 +307,17 @@ try {
     el('mic').click();
     for (let i=0;i<50 && (el('hold').hidden || el('hold').disabled);i++) await wait();
     if (el('hold').hidden || el('hold').disabled) throw Error('Push-to-talk did not become ready: ' + el('notice').textContent);
+    await new Promise(resolve => setTimeout(resolve,300));
+    if (getComputedStyle(el('mic')).backgroundColor !== 'rgb(166, 56, 71)' || getComputedStyle(el('mic').querySelector('.mic-facets')).opacity !== '0.2') throw Error('Active microphone lost its red state or gem texture');
     document.dispatchEvent(new KeyboardEvent('keydown',{key:'t',code:'KeyT',ctrlKey:true,bubbles:true,cancelable:true}));
     for (let i=0;i<50 && !el('live-messages').textContent.includes('Hello from the mock provider');i++) await wait();
     if (!el('live-messages').textContent.includes('Hello from the mock provider') || el('live-messages').querySelector('img')) throw Error('Browser audio or safe transcript failed');
+    const activeSelection = el('chat-select').value; el('history-toggle').click(); await wait();
+    const other = [...el('chat-list').querySelectorAll('button')].find(button => button.textContent.includes('Another conversation'));
+    if (!other) throw Error('Saved history row was missing'); other.click();
+    for (let i=0;i<50 && el('log-title').textContent !== 'Another conversation';i++) await wait();
+    if (el('chat-select').value !== activeSelection || !el('delete').disabled) throw Error('Browsing history changed or endangered the active session');
+    el('settings-toggle').click();
     document.dispatchEvent(new KeyboardEvent('keyup',{key:'t',code:'KeyT',ctrlKey:true,bubbles:true,cancelable:true}));
     if (el('hold').getAttribute('aria-pressed') !== 'false') throw Error('Shortcut release failed');
     el('hold').click(); if (el('hold').getAttribute('aria-pressed') !== 'true') throw Error('Assistive activation failed');
@@ -249,6 +334,23 @@ try {
     for (let i=0;i<50 && (el('history-panel').hidden || !el('log-messages').textContent.includes('Hello from the mock provider'));i++) await wait();
     if (el('history-panel').hidden || !el('log-messages').textContent.includes('Hello from the mock provider')) throw Error('Log did not open after session');
   })()`);
+  await evaluate(cdp, `(async () => {
+    const wait = () => new Promise(resolve => setTimeout(resolve,100)); const el = id => document.getElementById(id);
+    el('mic').click();
+    for (let i=0;i<100 && el('hold').disabled;i++) await wait();
+    if (el('hold').disabled) throw Error('Second session did not start');
+  })()`);
+  chatListDelay = 700;
+  await evaluate(cdp, `(async () => {
+    const wait = () => new Promise(resolve => setTimeout(resolve,100)); const el = id => document.getElementById(id); const picker = el('chat-select');
+    el('mic').click();
+    for (let i=0;i<100 && picker.disabled;i++) await wait();
+    picker.value = 'synthetic-other'; picker.dispatchEvent(new Event('change', {bubbles:true}));
+    for (let i=0;i<100 && el('log-title').textContent !== 'Another conversation';i++) await wait();
+    await new Promise(resolve => setTimeout(resolve,900));
+    if (picker.value !== 'synthetic-other' || el('log-title').textContent !== 'Another conversation') throw Error('A late post-session refresh replaced the user selection');
+  })()`);
+  chatListDelay = 0;
   rejectNextSetup = true;
   await evaluate(cdp, `(async () => {
     const wait = () => new Promise(resolve => setTimeout(resolve,100)); const el = id => document.getElementById(id);
@@ -296,7 +398,7 @@ try {
     el('forgot-password').click();
     if (el('recovery-help').hidden || !el('recovery-help').textContent.includes('administrador')) throw Error('Localized recovery guidance failed');
   })()`);
-  console.log(JSON.stringify({ pageScrolling:true, logoAndFooter:true, browserAudio:true, audioChunks, localizedProviderError:true, mountedPath:true, privateTextEscaped:true, shortcutRemapped:true, assistiveToggle:true, logAutoOpened:true, portuguese:true, darkMode:true, registration:true, administratorRecovery:true }));
+  console.log(JSON.stringify({ selectedLog:true, staleSelectionGuard:true, paging:true, logActions:true, micFacets:true, pageScrolling:true, logoAndFooter:true, browserAudio:true, audioChunks, localizedProviderError:true, mountedPath:true, privateTextEscaped:true, shortcutRemapped:true, assistiveToggle:true, logAutoOpened:true, portuguese:true, darkMode:true, registration:true, administratorRecovery:true }));
 } finally {
   devtools?.close(); chrome?.kill(); service?.kill();
   for (const socket of connections) socket.destroy();

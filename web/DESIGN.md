@@ -18,7 +18,13 @@ colors:
   dark-accent: "#578bff"
   dark-accent-strong: "#7ba3ff"
   dark-soft: "#233a5c"
+  microphone-idle: "#0757ef"
+  microphone-hover: "#0648cc"
+  microphone-facet-light: "#4a87ff"
+  microphone-facet-dark: "#0031bf"
   microphone-active: "#a63847"
+  microphone-active-facet-light: "#e3818f"
+  microphone-active-facet-dark: "#77192a"
 typography:
   body:
     fontFamily: '"Segoe UI", system-ui, sans-serif'
@@ -31,6 +37,9 @@ typography:
     fontFamily: '"Segoe UI", system-ui, sans-serif'
     fontSize: "1.08rem"
     letterSpacing: "-0.025em"
+  log-heading:
+    fontFamily: '"Segoe UI", system-ui, sans-serif'
+    fontSize: "0.95rem"
   field-label:
     fontFamily: '"Segoe UI", system-ui, sans-serif'
     fontSize: "0.76rem"
@@ -61,7 +70,7 @@ components:
   button-primary-hover:
     backgroundColor: "{colors.light-accent-strong}"
   microphone:
-    backgroundColor: "{colors.light-accent}"
+    backgroundColor: "{colors.microphone-idle}"
     textColor: "{colors.light-surface}"
     rounded: "{rounded.circle}"
     size: "132px"
@@ -101,7 +110,7 @@ components:
 
 ## Colors
 
-Blue identifies the microphone, primary actions, focus, and interactive emphasis. Cool neutral surfaces and text change with the selected theme. The microphone, waveform, brand mark, and primary buttons use the fixed light-accent blue in both themes; secondary accents use the theme-specific accent tokens. The active microphone changes to the recorded red.
+Blue identifies the microphone, primary actions, focus, and interactive emphasis. Cool neutral surfaces and text change with the selected theme. The microphone uses the logo's blue in both themes, with a subtle faceted texture at 20% opacity; the waveform and primary buttons retain the fixed light-accent blue. Secondary accents use theme-specific tokens. The active microphone changes to the recorded red.
 
 **The Theme Roles Rule.** Use the matching page, surface, ink, muted, line, accent, and soft colors together for each theme.
 
@@ -115,7 +124,7 @@ The frontmatter records the recurring brand, section-heading, field-label, and p
 
 The outer shell is centered and capped at 1030px. The practice surface caps at 500px; an open drawer adds a second column, up to 430px wide, with an 18px gap. The header stays aligned to the full workspace width so its controls do not move when a drawer opens. A quiet footer follows the page content. At 800px and below, the drawer stacks below the practice surface. At 390px and below, settings and history controls collapse to one column, horizontal panel padding tightens, and the microphone becomes 120px.
 
-The practice panel places the conversation selector above the centered microphone, status, timer, waveform, and transcript. History and settings use the same inset panel language and expand with the page. The live transcript scrolls within a bounded height so incoming speech does not move the page.
+The practice panel places the conversation selector above the centered microphone, status, timer, waveform, and transcript. Choosing a saved conversation reveals its log beneath the practice panel; the history drawer remains a searchable picker. History and settings use the same inset panel language and expand with the page. The live transcript scrolls within a bounded height so incoming speech does not move the page.
 
 ## Elevation & Depth
 
@@ -127,7 +136,7 @@ Panels have rounded corners, inputs and buttons use smaller radii, and the micro
 
 ## Components
 
-- **Microphone:** A fixed-blue circular button with a white outlined icon and a double ring. Hover enlarges it slightly and darkens the blue; press slightly shrinks it. The active state changes its fill and outer ring to red. Its transition lasts 0.2 seconds.
+- **Microphone:** A logo-blue circular button with subtle 20% gem facets, a white outlined icon, and a double ring. Hover enlarges it slightly and darkens the blue; press slightly shrinks it. The active state changes its fill and outer ring to red. Its transition lasts 0.2 seconds.
 - **Buttons:** Primary buttons have a blue fill and white text. Utility buttons are bordered squares, while secondary actions use quiet bordered or text-only treatments. Disabled buttons reduce opacity.
 - **Fields:** Inputs and selects use the current surface, ink, and border colors, with a minimum height of 42px. Labels sit above their controls.
 - **Transcript:** Assistant messages use the soft theme fill; user messages use a transparent fill and a thin border. Both share rounded corners and wrap long content.

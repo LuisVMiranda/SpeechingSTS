@@ -495,6 +495,7 @@ mod library_search;
 mod library_ui;
 mod library_view;
 mod log;
+mod microphone_art;
 mod partner_name;
 mod quick_chat;
 mod settings;
