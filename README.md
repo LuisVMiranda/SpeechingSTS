@@ -41,6 +41,22 @@ For Gemini, the default model is `gemini-3.8-live`. The app requests session res
 - **Web version:** `start-web.cmd` on Windows or `bash start-web.sh` on Linux/macOS starts the separate Rust web service in a normal browser tab. The guided setup can enable built-in accounts or a shared guest. Its settings and conversations are separate from the native app; see [the web setup guide](web/README.md).
 - **Old app:** `legacy-web\start.cmd` starts the preserved original Node/browser version.
 
+## Linux and macOS web launcher
+
+Run `bash start-web.sh` from the repository folder. The launcher detects macOS or Linux and reads `/etc/os-release` to identify Ubuntu, Debian, or Fedora. It asks for the setup language first: English (`EN`), Spanish (`ES`), or Brazilian Portuguese (`PT`). Set `SPEECHING_LAUNCHER_LANGUAGE=en`, `es`, or `pt` to skip that prompt. The server itself still uses the language selected in its web settings.
+
+If a build is needed, the launcher checks for a C compiler, `make`, `curl`, `pkg-config`, and trusted CA certificates. On Ubuntu and Debian, missing build packages prompt to install `build-essential`, `pkg-config`, `curl`, and `ca-certificates` with `apt`. Fedora uses `gcc`, `gcc-c++`, `make`, `pkgconf-pkg-config`, `curl`, and `ca-certificates` with `dnf`. Package installation requires your confirmation and may ask for `sudo` access. Other Linux distributions are detected as Linux, but the launcher cannot install their packages; install those dependencies yourself. Linux certificate detection checks `SSL_CERT_FILE` and common system certificate bundle paths.
+
+On macOS, missing Xcode Command Line Tools prompt to open Apple's installer. Finish that installation and run the launcher again. If `pkg-config` is missing, the launcher offers to install `pkgconf` with Homebrew; install Homebrew first if you want that option. The launcher checks that the macOS system root certificate keychain is available. It does not install or repair macOS certificates.
+
+If Rust or Cargo is missing, the launcher asks before downloading and running the official minimal `rustup` installer over HTTPS. It requires Rust 1.88 or newer; update an older toolchain separately, then rerun. Once dependencies are ready, it builds the Rust service in release mode. Pass `--no-build` to use an existing release executable without checking or building dependencies.
+
+On first launch, choose built-in login (the default) or shared guest mode. Built-in login gives each account a private conversation history and provider keys. If registration is disabled and no account exists yet, the launcher asks for the first username and password. To switch the saved mode later, use `--auth builtin` or `--auth off`; set `SPEECHING_AUTH` to supply the mode directly. Set `SPEECHING_ALLOW_REGISTRATION=false` to require administrator-created accounts.
+
+The launcher creates a separate master key and data directory when needed. By default, the key is `~/.config/speeching-web/master.key`, while data is stored under `~/.local/share/speeching-web` on Linux or `~/Library/Application Support/SpeechingWeb` on macOS. Protect and back up the master key: it is required to decrypt saved provider API keys. Set `SPEECHING_MASTER_KEY_FILE` or `SPEECHING_WEB_DATA` to choose other locations. If a database exists but its master key is missing, the launcher stops instead of generating a replacement.
+
+After setup, the service opens a regular browser tab when a graphical desktop is available. Use `--no-open` to print the address without opening a tab. The launcher stays active while the service runs; press Ctrl+C to stop it. Run `bash start-web.sh user add USERNAME` to add or reset an account. See [the detailed web configuration guide](web/README.md) for reverse proxies, authentication, storage, and recovery.
+
 ## Build from source
 
 Install the current Rust toolchain and Windows build tools, then run `cargo test --locked` and `cargo build --release --locked`. The executable is produced at `target\release\speeching.exe`. Copy it to the project root to use `start.vbs` or `start.cmd`; the root executable is ignored by Git. The original browser project is preserved in `legacy-web/`.
