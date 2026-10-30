@@ -186,6 +186,15 @@ function Initialize-Account([string]$Database) {
     Invoke-AccountCommand @('user', 'add', $username)
 }
 
+function Normalize-AuthenticationChoice([string]$Value) {
+    $choice = $Value.Trim()
+    $prefix = [Console]::InputEncoding.GetString([byte[]](0xEF, 0xBB, 0xBF))
+    if ($prefix -match '[^\x00-\x7F]' -and $choice.StartsWith($prefix, [StringComparison]::Ordinal)) {
+        $choice = $choice.Substring($prefix.Length).Trim()
+    }
+    return $choice.Trim([char]0xFEFF).Trim()
+}
+
 function Initialize-Authentication {
     $setting = Join-Path $env:SPEECHING_WEB_DATA 'launcher-auth'
     if ($AuthMode) {
@@ -199,8 +208,7 @@ function Initialize-Authentication {
         Write-Host 'Choose how people access Speeching web:'
         Write-Host '  1) Built-in login and separate accounts (recommended)'
         Write-Host '  2) No login (one shared guest; protect access externally)'
-        $choice = [string](Read-Host 'Choice [1]')
-        $choice = $choice.Trim().Trim([char]0xFEFF).Trim()
+        $choice = Normalize-AuthenticationChoice ([string](Read-Host 'Choice [1]'))
         switch ($choice) {
             { $_ -eq '' -or $_ -eq '1' } { $env:SPEECHING_AUTH = 'builtin' }
             '2' { $env:SPEECHING_AUTH = 'off' }

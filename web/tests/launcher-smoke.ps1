@@ -196,6 +196,17 @@ function Test-MissingKeyFailsClosed {
 }
 
 function Test-AuthenticationChoice {
+    $previousEncoding = [Console]::InputEncoding
+    try {
+        # A UTF-8 input writer can prepend a BOM to redirected setup choices.
+        [Console]::InputEncoding = [Text.Encoding]::UTF8
+        Test-AuthenticationChoiceWithUtf8
+    } finally {
+        [Console]::InputEncoding = $previousEncoding
+    }
+}
+
+function Test-AuthenticationChoiceWithUtf8 {
     $options = @{
         Port=(Get-FreePort); Data=(Join-Path $testRoot 'choice data');
         KeyFile=(Join-Path $testRoot 'choice key\master.key'); Flags='-NoBuild -NoOpen'; AuthChoice='2'
