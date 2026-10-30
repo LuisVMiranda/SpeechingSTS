@@ -40,6 +40,7 @@ stop_launcher() {
 start_launcher() {
   port=$(free_port)
   printf '%s\n' "$1" | env -i PATH="$PATH" HOME="$temp/home" \
+    SPEECHING_LAUNCHER_LANGUAGE=en \
     SPEECHING_WEB_DATA="$temp/private data" SPEECHING_MASTER_KEY_FILE="$temp/private config/master.key" \
     SPEECHING_LISTEN="127.0.0.1:$port" \
     bash "$project/start-web.sh" --no-build --no-open > "$temp/log" 2>&1 &
@@ -73,11 +74,11 @@ test_missing_key() {
   printf 'existing data' > "$temp/existing/speeching-web.sqlite3"
   before=$(cksum "$temp/existing/speeching-web.sqlite3")
   if env -i PATH="$PATH" HOME="$temp/home" SPEECHING_WEB_DATA="$temp/existing" \
-    SPEECHING_MASTER_KEY_FILE="$temp/missing/master.key" SPEECHING_AUTH=off \
+    SPEECHING_MASTER_KEY_FILE="$temp/missing/master.key" SPEECHING_AUTH=off SPEECHING_LAUNCHER_LANGUAGE=en \
     bash "$project/start-web.sh" --no-build --no-open > "$temp/missing.log" 2>&1; then
     echo 'Missing master key should have prevented startup.' >&2; exit 1
   fi
-  grep -q 'no master key' "$temp/missing.log"
+  grep -q 'master key is missing' "$temp/missing.log"
   [ ! -e "$temp/missing/master.key" ]
   [ "$(cksum "$temp/existing/speeching-web.sqlite3")" = "$before" ]
 }
@@ -85,7 +86,7 @@ test_missing_key() {
 test_auth_override() {
   port=$(free_port)
   env -i PATH="$PATH" HOME="$temp/home" SPEECHING_WEB_DATA="$temp/private data" \
-    SPEECHING_MASTER_KEY_FILE="$temp/private config/master.key" SPEECHING_LISTEN="127.0.0.1:$port" \
+    SPEECHING_MASTER_KEY_FILE="$temp/private config/master.key" SPEECHING_LISTEN="127.0.0.1:$port" SPEECHING_LAUNCHER_LANGUAGE=en \
     bash "$project/start-web.sh" --no-build --no-open --auth builtin > "$temp/log" 2>&1 &
   launcher_pid=$!
   wait_ready
@@ -130,9 +131,10 @@ SCRIPT
     : > "$fixture/web/Cargo.toml"
     : > "$fixture/web/Cargo.lock"
     cp "$project/start-web.sh" "$fixture/start-web.sh"
+    cp "$project/web/launcher-i18n.tsv" "$fixture/web/launcher-i18n.tsv"
     printf 'ID="%s"\n' "$distro" > "$fixture/os-release"
     trace="$fixture/commands"
-    printf 'y\n' | env -i PATH="$fake" HOME="$temp/home" SPEECHING_OS_RELEASE_FILE="$fixture/os-release" \
+    printf 's\n' | env -i PATH="$fake" HOME="$temp/home" SPEECHING_OS_RELEASE_FILE="$fixture/os-release" SPEECHING_LAUNCHER_LANGUAGE=es \
       SPEECHING_WEB_DATA="$fixture/data" SPEECHING_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \
       SPEECHING_TEST_TRACE="$trace" "$BASH" "$fixture/start-web.sh" user add demo > "$fixture/log" 2>&1 || { cat "$fixture/log"; return 1; }
     if [ "$distro" = fedora ]; then
@@ -150,15 +152,32 @@ future = time.time() + 5
 os.utime(sys.argv[1], (future, future))
 PY
     builds=$(grep -c '^cargo:' "$trace")
-    env -i PATH="$fake" HOME="$temp/home" SPEECHING_OS_RELEASE_FILE="$fixture/os-release" \
+    env -i PATH="$fake" HOME="$temp/home" SPEECHING_OS_RELEASE_FILE="$fixture/os-release" SPEECHING_LAUNCHER_LANGUAGE=en \
       SPEECHING_WEB_DATA="$fixture/data" SPEECHING_MASTER_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \
       SPEECHING_TEST_TRACE="$trace" "$BASH" "$fixture/start-web.sh" user add demo > "$fixture/log" 2>&1 || { cat "$fixture/log"; return 1; }
     [ "$(grep -c '^cargo:' "$trace")" = "$builds" ]
   done
 }
 
+test_language_choice() {
+  for language in ES PT; do
+    port=$(free_port)
+    printf '%s\n2\n' "$language" | env -i PATH="$PATH" HOME="$temp/home" \
+      SPEECHING_WEB_DATA="$temp/language-$language" SPEECHING_MASTER_KEY_FILE="$temp/language-key-$language/master.key" \
+      SPEECHING_LISTEN="127.0.0.1:$port" bash "$project/start-web.sh" --no-build --no-open > "$temp/log" 2>&1 &
+    launcher_pid=$!
+    wait_ready
+    grep -q '"auth":"off"' "$temp/mode"
+    grep -q '^Language / Idioma' "$temp/log"
+    if [ "$language" = ES ]; then grep -q 'Iniciando Speeching web' "$temp/log"; grep -q 'Elige' "$temp/log"
+    else grep -q 'Iniciando o Speeching web' "$temp/log"; grep -q 'Escolha' "$temp/log"; fi
+    stop_launcher
+  done
+}
+
 test_persistence
 test_missing_key
 test_auth_override
+test_language_choice
 test_distro_commands
 echo 'Unix launcher checks passed: choice, permissions, key persistence, recovery guard, authentication override, and package commands.'

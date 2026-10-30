@@ -62,6 +62,7 @@ async fn secure_provider_handshake_reports_connection_failure_without_panicking(
         .unwrap();
     let response: Value = serde_json::from_str(&response).unwrap();
     assert_eq!(response["type"], "error");
+    assert_eq!(response["code"], "providerConnectionFailed");
     assert!(response["message"]
         .as_str()
         .unwrap()

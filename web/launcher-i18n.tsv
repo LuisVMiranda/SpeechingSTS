@@ -1,0 +1,63 @@
+usage_windows	Usage: start-web.cmd [-NoOpen] [-NoBuild] [-AuthMode builtin|off] [user add USERNAME]	Uso: start-web.cmd [-NoOpen] [-NoBuild] [-AuthMode builtin|off] [user add USUARIO]	Uso: start-web.cmd [-NoOpen] [-NoBuild] [-AuthMode builtin|off] [user add USUARIO]
+usage_unix	Usage: start-web.sh [--no-open] [--no-build] [--auth builtin|off] [user add USERNAME]	Uso: start-web.sh [--no-open] [--no-build] [--auth builtin|off] [user add USUARIO]	Uso: start-web.sh [--no-open] [--no-build] [--auth builtin|off] [user add USUARIO]
+auth_argument	The authentication option must be builtin or off.	La opción de autenticación debe ser builtin u off.	A opção de autenticação deve ser builtin ou off.
+wrong_system	This launcher supports Linux and macOS. Use start-web.cmd on Windows.	Este iniciador admite Linux y macOS. En Windows, usa start-web.cmd.	Este inicializador oferece suporte a Linux e macOS. No Windows, use start-web.cmd.
+detected_system	Detected {0} ({1}).	Sistema detectado: {0} ({1}).	Sistema detectado: {0} ({1}).
+confirm_hint	[y/N]	[s/N]	[s/N]
+need_sudo	Install sudo or run the package commands as an administrator.	Instala sudo o ejecuta los comandos de paquetes como administrador.	Instale o sudo ou execute os comandos de pacotes como administrador.
+apt_ask	Install build tools and curl with apt?	¿Instalar herramientas de compilación y curl con apt?	Instalar ferramentas de compilação e curl com apt?
+apt_missing	Install build-essential, pkg-config, curl, and ca-certificates, then rerun.	Instala build-essential, pkg-config, curl y ca-certificates; después vuelve a ejecutar el iniciador.	Instale build-essential, pkg-config, curl e ca-certificates e execute o inicializador novamente.
+fedora_ask	Install build tools and curl with dnf?	¿Instalar herramientas de compilación y curl con dnf?	Instalar ferramentas de compilação e curl com dnf?
+fedora_missing	Install gcc, gcc-c++, make, pkgconf-pkg-config, curl, and ca-certificates, then rerun.	Instala gcc, gcc-c++, make, pkgconf-pkg-config, curl y ca-certificates; después vuelve a ejecutar el iniciador.	Instale gcc, gcc-c++, make, pkgconf-pkg-config, curl e ca-certificates e execute o inicializador novamente.
+xcode_ask	Open the Xcode command line tools installer?	¿Abrir el instalador de herramientas de línea de comandos de Xcode?	Abrir o instalador das ferramentas de linha de comando do Xcode?
+xcode_missing	Install Xcode command line tools, then rerun.	Instala las herramientas de línea de comandos de Xcode y vuelve a ejecutar el iniciador.	Instale as ferramentas de linha de comando do Xcode e execute o inicializador novamente.
+xcode_finish	Complete the command line tools installation, then rerun this launcher.	Termina la instalación de las herramientas de línea de comandos y vuelve a ejecutar este iniciador.	Conclua a instalação das ferramentas de linha de comando e execute este inicializador novamente.
+generic_missing	Install a C compiler, make, and curl for this distribution, then rerun.	Instala un compilador de C, make y curl para esta distribución y vuelve a ejecutar el iniciador.	Instale um compilador C, make e curl para esta distribuição e execute o inicializador novamente.
+rust_ask	Install the stable Rust toolchain with rustup?	¿Instalar la versión estable de Rust con rustup?	Instalar a versão estável do Rust com rustup?
+rust_missing	Install Rust 1.88 or newer, then rerun.	Instala Rust 1.88 o posterior y vuelve a ejecutar el iniciador.	Instale o Rust 1.88 ou mais recente e execute o inicializador novamente.
+rust_download_error	Could not download the Rust installer.	No se pudo descargar el instalador de Rust.	Não foi possível baixar o instalador do Rust.
+rust_install_error	Rust installation did not complete.	La instalación de Rust no se completó.	A instalação do Rust não foi concluída.
+rust_version_unknown	Could not determine the Rust version.	No se pudo determinar la versión de Rust.	Não foi possível determinar a versão do Rust.
+rust_version_old	Rust 1.88 or newer is required. Update Rust, then rerun.	Se requiere Rust 1.88 o posterior. Actualiza Rust y vuelve a ejecutar el iniciador.	É necessário ter o Rust 1.88 ou mais recente. Atualize o Rust e execute o inicializador novamente.
+no_build_windows	The web executable is missing. Install Rust and run start-web.cmd without -NoBuild.	Falta el ejecutable web. Instala Rust y ejecuta start-web.cmd sin -NoBuild.	O executável web não foi encontrado. Instale o Rust e execute start-web.cmd sem -NoBuild.
+no_cargo_windows	The web executable is missing or older than its source. Install Rust and Windows build tools, then run start-web.cmd again.	El ejecutable web falta o está desactualizado. Instala Rust y las herramientas de compilación de Windows; después ejecuta start-web.cmd de nuevo.	O executável web está ausente ou desatualizado. Instale o Rust e as ferramentas de compilação do Windows e execute start-web.cmd novamente.
+no_build_unix	The release executable is missing; rerun without --no-build.	Falta el ejecutable; vuelve a ejecutar el iniciador sin --no-build.	O executável não foi encontrado; execute o inicializador novamente sem --no-build.
+building	Building the current Rust web release...	Compilando la versión web actual de Rust...	Compilando a versão web atual em Rust...
+build_failed	The web release could not be built. See the errors above.	No se pudo compilar la versión web. Consulta los errores anteriores.	Não foi possível compilar a versão web. Confira os erros acima.
+no_executable	The build finished without producing the web executable.	La compilación terminó sin generar el ejecutable web.	A compilação terminou sem gerar o executável web.
+localapp_missing	LOCALAPPDATA is unavailable. Set SPEECHING_WEB_DATA to a private directory.	LOCALAPPDATA no está disponible. Configura SPEECHING_WEB_DATA con una carpeta privada.	LOCALAPPDATA não está disponível. Defina SPEECHING_WEB_DATA como uma pasta privada.
+db_multiple	Multiple web databases were found. Set SPEECHING_WEB_DATA to the one you want to use.	Se encontraron varias bases de datos web. Configura SPEECHING_WEB_DATA con la que deseas usar.	Foram encontrados vários bancos de dados web. Defina SPEECHING_WEB_DATA para aquele que deseja usar.
+key_create_error	Could not securely create the web master key.	No se pudo crear de forma segura la clave maestra web.	Não foi possível criar a chave mestra web com segurança.
+key_install_error	Could not install the master key safely.	No se pudo guardar la clave maestra de forma segura.	Não foi possível salvar a chave mestra com segurança.
+origin_required	Set SPEECHING_ORIGIN to the browser origin for this listen address.	Configura SPEECHING_ORIGIN con el origen del navegador para esta dirección.	Defina SPEECHING_ORIGIN com a origem do navegador para este endereço.
+profile_missing	USERPROFILE is unavailable. Set SPEECHING_MASTER_KEY_FILE to a protected key file.	USERPROFILE no está disponible. Configura SPEECHING_MASTER_KEY_FILE con un archivo de clave protegido.	USERPROFILE não está disponível. Defina SPEECHING_MASTER_KEY_FILE como um arquivo de chave protegido.
+key_missing	The web database already exists but its master key is missing. Restore the original key; a replacement would make saved API keys unreadable.	La base de datos web ya existe, pero falta su clave maestra. Restaura la clave original; una nueva impediría leer las claves API guardadas.	O banco de dados web já existe, mas sua chave mestra está ausente. Restaure a chave original; uma nova impediria a leitura das chaves de API salvas.
+key_created	Created a protected web master key. Back it up securely; it is needed to recover saved provider keys.	Se creó una clave maestra web protegida. Guárdala de forma segura: la necesitarás para recuperar las claves de proveedores.	Uma chave mestra web protegida foi criada. Guarde uma cópia em segurança: ela é necessária para recuperar as chaves dos provedores.
+account_save_failed	The account was not saved.	No se guardó la cuenta.	A conta não foi salva.
+first_account_windows	Create the first web account. The password is not displayed while you type.	Crea la primera cuenta web. La contraseña no se muestra mientras escribes.	Crie a primeira conta web. A senha não aparece enquanto você digita.
+first_account_unix	Registration is disabled. Create the first web account.	El registro está desactivado. Crea la primera cuenta web.	O cadastro está desativado. Crie a primeira conta web.
+username	Username	Usuario	Usuário
+account_cancel_windows	Account setup canceled. Run start-web.cmd again to create an account.	Se canceló la creación de la cuenta. Ejecuta start-web.cmd de nuevo para crearla.	A criação da conta foi cancelada. Execute start-web.cmd novamente para criá-la.
+account_cancel_unix	Account setup canceled. Run start-web.sh user add USERNAME to create an account.	Se canceló la creación de la cuenta. Ejecuta start-web.sh user add USUARIO para crearla.	A criação da conta foi cancelada. Execute start-web.sh user add USUARIO para criá-la.
+auth_intro	Choose how people access Speeching web:	Elige cómo accederán las personas a Speeching web:	Escolha como as pessoas acessarão o Speeching web:
+auth_login	  1) Built-in login and separate accounts (recommended)	  1) Inicio de sesión integrado y cuentas separadas (recomendado)	  1) Login integrado e contas separadas (recomendado)
+auth_guest	  2) No login (one shared guest; protect access externally)	  2) Sin inicio de sesión (un invitado compartido; protege el acceso externamente)	  2) Sem login (um convidado compartilhado; proteja o acesso externamente)
+auth_choice	Choice [1]	Opción [1]	Opção [1]
+auth_invalid	Choose 1 or 2 and restart.	Elige 1 o 2 y vuelve a ejecutar el iniciador.	Escolha 1 ou 2 e execute o inicializador novamente.
+auth_saved_invalid	The saved launcher authentication setting is invalid.	La opción de autenticación guardada no es válida.	A opção de autenticação salva é inválida.
+browser_not_found	The configured browser was not found. Open {0} manually.	No se encontró el navegador configurado. Abre {0} manualmente.	O navegador configurado não foi encontrado. Abra {0} manualmente.
+browser_open_failed	Could not open the browser. Open {0} manually.	No se pudo abrir el navegador. Abre {0} manualmente.	Não foi possível abrir o navegador. Abra {0} manualmente.
+starting_windows	Starting Speeching web. Open {0} if a browser does not appear.	Iniciando Speeching web. Abre {0} si no aparece el navegador.	Iniciando o Speeching web. Abra {0} se o navegador não aparecer.
+keep_open	Keep this window open; press Ctrl+C to stop the web service.	Mantén esta ventana abierta; pulsa Ctrl+C para detener el servicio web.	Mantenha esta janela aberta; pressione Ctrl+C para interromper o serviço web.
+service_exit	The web service exited with code {0}.	El servicio web terminó con el código {0}.	O serviço web terminou com o código {0}.
+starting_unix	Starting Speeching web at {0}. Press Ctrl+C to stop.	Iniciando Speeching web en {0}. Pulsa Ctrl+C para detenerlo.	Iniciando o Speeching web em {0}. Pressione Ctrl+C para interromper.
+press_enter	Press Enter to close	Pulsa Intro para cerrar	Pressione Enter para fechar
+cli_username_error	Username must use 1–64 letters, digits, dots, underscores, hyphens, or @.	El usuario debe tener entre 1 y 64 letras, números, puntos, guiones, guiones bajos o @.	O usuário deve ter de 1 a 64 letras, números, pontos, hífens, sublinhados ou @.
+cli_password_prompt	Password (at least 12 characters):	Contraseña (al menos 12 caracteres):	Senha (pelo menos 12 caracteres):
+cli_repeat_password	Repeat password:	Repite la contraseña:	Repita a senha:
+cli_password_mismatch	Passwords do not match.	Las contraseñas no coinciden.	As senhas não coincidem.
+cli_password_length	Use a password of 12 to 1024 bytes.	Usa una contraseña de 12 a 1024 bytes.	Use uma senha de 12 a 1024 bytes.
+cli_password_hash	Could not protect the password.	No se pudo proteger la contraseña.	Não foi possível proteger a senha.
+cli_password_read	Could not read password.	No se pudo leer la contraseña.	Não foi possível ler a senha.
+cli_saved	Account saved: {0}	Cuenta guardada: {0}	Conta salva: {0}
+cli_database_error	Could not save the account. Check the web data directory.	No se pudo guardar la cuenta. Revisa la carpeta de datos web.	Não foi possível salvar a conta. Confira a pasta de dados web.

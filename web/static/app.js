@@ -8,6 +8,7 @@ const defaults = { provider:'gemini', language:'Spanish', level:'Intermediate', 
 const languages = [['English','en'],['Spanish','es'],['Portuguese','pt'],['Portuguese (Brazil)','pt-BR'],['Portuguese (Portugal)','pt-PT'],['French','fr'],['German','de'],['Italian','it'],['Japanese','ja'],['Korean','ko'],['Mandarin Chinese','zh'],['Hindi','hi'],['Arabic','ar'],['Dutch','nl'],['Polish','pl'],['Russian','ru'],['Turkish','tr'],['Indonesian','id'],['Vietnamese','vi'],['Thai','th']];
 const voices = { gemini:['Aoede','Puck','Kore','Zephyr','Charon','Fenrir','Leda','Orus','Callirrhoe','Autonoe','Enceladus','Iapetus','Umbriel','Algieba','Despina','Erinome','Algenib','Rasalgethi','Laomedeia','Achernar','Alnilam','Schedar','Gacrux','Pulcherrima','Achird','Zubenelgenubi','Vindemiatrix','Sadachbia','Sadaltager','Sulafat'], openai:['alloy','ash','ballad','coral','echo','sage','shimmer','verse','marin','cedar'] };
 const feminine = new Set(['Achernar','Aoede','Autonoe','Callirrhoe','Despina','Erinome','Gacrux','Kore','Laomedeia','Leda','Pulcherrima','Sulafat','Vindemiatrix','Zephyr','alloy','coral','sage','shimmer','marin']);
+const providerErrors = new Set(['providerInvalidKey','providerQuota','providerModelUnavailable','providerAccessDenied','providerSetupRejected','providerDisconnected','providerConnectionFailed']);
 const voiceTones = {
   en:['Breezy','Upbeat','Firm','Bright','Informative','Excitable','Youthful','Firm','Easy-going','Bright','Breathy','Clear','Easy-going','Smooth','Smooth','Clear','Gravelly','Informative','Upbeat','Soft','Firm','Even','Mature','Forward','Friendly','Casual','Gentle','Lively','Knowledgeable','Warm'],
   es:['Ligera','Animada','Firme','Brillante','Informativa','Entusiasta','Juvenil','Firme','Relajada','Brillante','Aireada','Clara','Relajada','Suave','Suave','Clara','Rasposa','Informativa','Animada','Suave','Firme','Uniforme','Madura','Directa','Amigable','Informal','Gentil','Vivaz','Experta','Cálida'],
@@ -194,7 +195,7 @@ function liveMessage(event) {
   if (event.type === 'transcript') renderLive(event);
   if (event.type === 'user_item') renderLive({ speaker:'user', id:event.id, text:'', replace:false });
   if (event.type === 'chat') activeChat = event.id;
-  if (event.type === 'error') notify(event.message);
+  if (event.type === 'error') notify(providerErrors.has(event.code) ? text(event.code) : event.message);
 }
 function closed() {
   const epoch = identityEpoch;

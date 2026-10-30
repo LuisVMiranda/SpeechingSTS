@@ -16,15 +16,16 @@ const temp = mkdtempSync(path.join(os.tmpdir(), 'speeching-browser-'));
 const executable = process.env.SPEECHING_TEST_EXE || path.join(project, 'target', 'release', process.platform === 'win32' ? 'speeching-web.exe' : 'speeching-web');
 const chromePath = process.env.CHROME || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : 'google-chrome');
 const screenshots = process.env.SPEECHING_SCREENSHOT_DIR;
-let chrome, service, devtools, proxy, mock, audioChunks = 0, preferenceSeen = false;
+let chrome, service, devtools, proxy, mock, audioChunks = 0, preferenceSeen = false, rejectNextSetup = false;
 const connections = new Set();
 
 function track(socket) { connections.add(socket); socket.on('close', () => connections.delete(socket)); socket.on('error', () => socket.destroy()); }
 function listen(server) { return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server.address().port))); }
 async function freePort() { const server = net.createServer(); const port = await listen(server); await new Promise(resolve => server.close(resolve)); return port; }
-function sendFrame(socket, value) {
+function sendFrame(socket, value, binary = false) {
   const data = Buffer.from(JSON.stringify(value));
-  const header = data.length < 126 ? Buffer.from([0x81, data.length]) : Buffer.from([0x81,126,data.length >> 8,data.length & 255]);
+  const opcode = binary ? 0x82 : 0x81;
+  const header = data.length < 126 ? Buffer.from([opcode, data.length]) : Buffer.from([opcode,126,data.length >> 8,data.length & 255]);
   socket.write(Buffer.concat([header, data]));
 }
 function frameSize(buffer) {
@@ -64,13 +65,16 @@ function createMock() {
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     let replied = false;
     consumeFrames(socket, value => {
-      if (value.setup) sendFrame(socket, { setupComplete:{} });
+      if (value.setup) {
+        if (rejectNextSetup) { rejectNextSetup = false; sendFrame(socket, { error:{message:'API key not valid. synthetic-secret-marker'} }, true); }
+        else sendFrame(socket, { setupComplete:{} }, true);
+      }
       if (value.clientContent && JSON.stringify(value).includes('Discuss astronomy')) preferenceSeen = true;
       if (!value.realtimeInput?.audio) return;
       audioChunks++;
       if (replied) return;
       replied = true;
-      sendFrame(socket, { serverContent:{ inputTranscription:{text:'Synthetic learner speech.'}, outputTranscription:{text:'Hello from the mock provider <img src=x onerror=alert(1)>'}, modelTurn:{parts:[{inlineData:{data:'AAE='}}]}, turnComplete:true } });
+      sendFrame(socket, { serverContent:{ inputTranscription:{text:'Synthetic learner speech.'}, outputTranscription:{text:'Hello from the mock provider <img src=x onerror=alert(1)>'}, modelTurn:{parts:[{inlineData:{data:'AAE='}}]}, turnComplete:true } }, true);
     });
   });
   return server;
@@ -199,6 +203,13 @@ try {
     for (let i=0;i<50 && (el('history-panel').hidden || !el('log-messages').textContent.includes('Hello from the mock provider'));i++) await wait();
     if (el('history-panel').hidden || !el('log-messages').textContent.includes('Hello from the mock provider')) throw Error('Log did not open after session');
   })()`);
+  rejectNextSetup = true;
+  await evaluate(cdp, `(async () => {
+    const wait = () => new Promise(resolve => setTimeout(resolve,100)); const el = id => document.getElementById(id);
+    el('mic').click();
+    for (let i=0;i<100 && !el('notice').textContent.includes('rejeitou a chave');i++) await wait();
+    if (!el('notice').textContent.includes('rejeitou a chave') || el('notice').textContent.includes('synthetic-secret-marker')) throw Error('Localized provider error was missing or unsafe');
+  })()`);
   service.kill();
   await waitFor(() => service.exitCode !== null || service.signalCode !== null, 'First service did not stop');
   const authPort = await freePort(), authOrigin = `http://127.0.0.1:${authPort}`;
@@ -239,7 +250,7 @@ try {
     el('forgot-password').click();
     if (el('recovery-help').hidden || !el('recovery-help').textContent.includes('administrador')) throw Error('Localized recovery guidance failed');
   })()`);
-  console.log(JSON.stringify({ browserAudio:true, audioChunks, mountedPath:true, privateTextEscaped:true, shortcutRemapped:true, assistiveToggle:true, logAutoOpened:true, portuguese:true, darkMode:true, registration:true, administratorRecovery:true }));
+  console.log(JSON.stringify({ browserAudio:true, audioChunks, localizedProviderError:true, mountedPath:true, privateTextEscaped:true, shortcutRemapped:true, assistiveToggle:true, logAutoOpened:true, portuguese:true, darkMode:true, registration:true, administratorRecovery:true }));
 } finally {
   devtools?.close(); chrome?.kill(); service?.kill();
   for (const socket of connections) socket.destroy();

@@ -1,7 +1,7 @@
 use crate::{
     auth::{self, Identity},
     crypto,
-    protocol::{self, Event, Practice},
+    protocol::{Event, Practice},
     store::Message as Transcript,
     AppState,
 };
@@ -28,6 +28,7 @@ use tokio_tungstenite::{
 };
 
 const MAX_AUDIO_CHUNK: usize = 8192;
+mod provider;
 mod recorder;
 use recorder::Recorder;
 #[cfg(test)]
@@ -267,8 +268,12 @@ async fn connect_provider(
     .await
     {
         Ok(Ok((connection, _))) => Some(connection),
-        _ => {
-            send_error(socket, "Could not connect to the provider. Check your key, model, and server configuration.").await;
+        Ok(Err(error)) => {
+            provider::connection_failed(socket, p, Some(&error)).await;
+            None
+        }
+        Err(_) => {
+            provider::connection_failed(socket, p, None).await;
             None
         }
     }
@@ -381,7 +386,7 @@ async fn handle_tick(event: RelayTick, receiver: &mut Receiver<'_>) -> bool {
             false
         }
         RelayTick::Client(incoming) => receive_client(incoming, receiver).await,
-        RelayTick::Provider(incoming) => receive_provider(incoming, receiver).await,
+        RelayTick::Provider(incoming) => provider::receive(incoming, receiver).await,
     }
 }
 
@@ -399,29 +404,6 @@ async fn receive_client(
         *receiver.ready,
     )
     .await
-}
-
-async fn receive_provider(
-    incoming: Option<Result<UpstreamMessage, tokio_tungstenite::tungstenite::Error>>,
-    receiver: &mut Receiver<'_>,
-) -> bool {
-    let text = match incoming {
-        Some(Ok(UpstreamMessage::Text(text))) => text,
-        Some(Ok(UpstreamMessage::Ping(_) | UpstreamMessage::Pong(_))) => return true,
-        _ => {
-            client_error(receiver.client_tx, "The provider connection ended. You can continue this conversation by starting again.").await;
-            return false;
-        }
-    };
-    let Ok(data) = serde_json::from_str::<Value>(&text) else {
-        return true;
-    };
-    for event in protocol::parse(&receiver.practice.provider, &data) {
-        if !receive_event(event, receiver).await {
-            return false;
-        }
-    }
-    true
 }
 
 async fn receive_event(event: Event, receiver: &mut Receiver<'_>) -> bool {

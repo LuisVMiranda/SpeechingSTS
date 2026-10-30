@@ -7,9 +7,12 @@ mod api_chat_tests;
 mod auth;
 mod config;
 mod crypto;
+mod launcher_cli;
 mod live;
 #[cfg(test)]
 mod live_auth_tests;
+#[cfg(test)]
+mod live_frame_tests;
 #[cfg(test)]
 mod live_tls_tests;
 #[cfg(test)]
@@ -81,20 +84,26 @@ fn data_store(dir: &Path) -> Result<store::Store, String> {
 fn add_user(input: &str) -> Result<(), String> {
     let name = input.trim().to_ascii_lowercase();
     if !auth::valid_username(&name) {
-        return Err(
-            "Username must use 1–64 letters, digits, dots, underscores, hyphens, or @.".into(),
-        );
+        return Err(launcher_cli::text("cli_username_error").into());
     }
-    let password = rpassword::prompt_password("Password (at least 12 characters): ")
-        .map_err(|_| "Could not read password.")?;
+    let password =
+        rpassword::prompt_password(format!("{} ", launcher_cli::text("cli_password_prompt")))
+            .map_err(|_| launcher_cli::text("cli_password_read"))?;
     let repeat =
-        rpassword::prompt_password("Repeat password: ").map_err(|_| "Could not read password.")?;
+        rpassword::prompt_password(format!("{} ", launcher_cli::text("cli_repeat_password")))
+            .map_err(|_| launcher_cli::text("cli_password_read"))?;
     if password != repeat {
-        return Err("Passwords do not match.".into());
+        return Err(launcher_cli::text("cli_password_mismatch").into());
     }
-    let hash = auth::hash_password(&password)?;
-    data_store(&config::data_dir())?.put_user(&name, &hash)?;
-    println!("Account saved: {name}");
+    if !(12..=1024).contains(&password.len()) {
+        return Err(launcher_cli::text("cli_password_length").into());
+    }
+    let hash =
+        auth::hash_password(&password).map_err(|_| launcher_cli::text("cli_password_hash"))?;
+    data_store(&config::data_dir())
+        .and_then(|store| store.put_user(&name, &hash))
+        .map_err(|_| launcher_cli::text("cli_database_error"))?;
+    println!("{}", launcher_cli::text("cli_saved").replace("{0}", &name));
     Ok(())
 }
 

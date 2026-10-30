@@ -25,11 +25,15 @@ function Start-TestLauncher([hashtable]$Settings) {
     $info.CreateNoWindow = $true
     $info.RedirectStandardOutput = $true
     $info.RedirectStandardError = $true
-    if ($Settings.ContainsKey('AuthChoice')) { $info.RedirectStandardInput = $true }
+    $info.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $info.StandardErrorEncoding = [Text.Encoding]::UTF8
+    if ($Settings.ContainsKey('AuthChoice') -or $Settings.ContainsKey('LanguageChoice')) { $info.RedirectStandardInput = $true }
     foreach ($name in @($info.EnvironmentVariables.Keys)) {
         if ($name -like 'SPEECHING_*') { $info.EnvironmentVariables.Remove($name) }
     }
     $info.EnvironmentVariables['SPEECHING_AUTH'] = 'off'
+    $info.EnvironmentVariables['SPEECHING_LAUNCHER_LANGUAGE'] = 'en'
+    if ($Settings.ContainsKey('LanguageChoice')) { $info.EnvironmentVariables.Remove('SPEECHING_LAUNCHER_LANGUAGE') }
     if ($Settings.ContainsKey('AuthChoice')) { $info.EnvironmentVariables.Remove('SPEECHING_AUTH') }
     $info.EnvironmentVariables['SPEECHING_WEB_DATA'] = $Settings.Data
     $info.EnvironmentVariables['SPEECHING_LISTEN'] = "127.0.0.1:$($Settings.Port)"
@@ -54,9 +58,12 @@ function Start-TestLauncher([hashtable]$Settings) {
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $info
     if (-not $process.Start()) { throw 'Could not start the test launcher.' }
-    if ($Settings.ContainsKey('AuthChoice')) {
+    if ($info.RedirectStandardInput) {
         $inputStream = $process.StandardInput.BaseStream
-        $inputBytes = [Text.Encoding]::ASCII.GetBytes("$($Settings.AuthChoice)`r`n")
+        $choices = @()
+        if ($Settings.ContainsKey('LanguageChoice')) { $choices += $Settings.LanguageChoice }
+        if ($Settings.ContainsKey('AuthChoice')) { $choices += $Settings.AuthChoice }
+        $inputBytes = [Text.Encoding]::ASCII.GetBytes(($choices -join "`r`n") + "`r`n")
         $inputStream.Write($inputBytes, 0, $inputBytes.Length)
         $inputStream.Flush()
         $inputStream.Dispose()
@@ -83,6 +90,7 @@ function Test-BuildAndRefresh {
     $null = New-Item -ItemType Directory -Force -Path (Join-Path $fixtureWeb 'src'), (Join-Path $fixtureWeb 'static')
     Copy-Item -LiteralPath $launcher -Destination (Join-Path $fixture 'start-web.cmd')
     Copy-Item -LiteralPath (Join-Path $webRoot 'start-web.ps1') -Destination (Join-Path $fixtureWeb 'start-web.ps1')
+    Copy-Item -LiteralPath (Join-Path $webRoot 'launcher-i18n.tsv') -Destination (Join-Path $fixtureWeb 'launcher-i18n.tsv')
     [IO.File]::WriteAllText((Join-Path $fixtureWeb 'Cargo.toml'), "[package]`nname = 'speeching-web'`nversion = '0.0.0'`nedition = '2021'`n", [Text.Encoding]::ASCII)
     [IO.File]::WriteAllText((Join-Path $fixtureWeb 'Cargo.lock'), "version = 4`n[[package]]`nname = 'speeching-web'`nversion = '0.0.0'`n", [Text.Encoding]::ASCII)
     $source = Join-Path $fixtureWeb 'src\main.rs'
@@ -227,6 +235,26 @@ function Test-AuthenticationChoiceWithUtf8 {
     Stop-TestLauncher $process $options.Port
 }
 
+function Test-LanguageChoice {
+    foreach ($case in @(
+        @{ Language='ES'; Expected='Iniciando Speeching web'; Intro='Elige' },
+        @{ Language='PT'; Expected='Iniciando o Speeching web'; Intro='Escolha' }
+    )) {
+        $options = @{
+            Port=(Get-FreePort); Data=(Join-Path $testRoot "language-$($case.Language)");
+            KeyFile=(Join-Path $testRoot "language-$($case.Language)-key\master.key");
+            Flags='-NoBuild -NoOpen'; LanguageChoice=$case.Language; AuthChoice='2'
+        }
+        $process = Start-TestLauncher $options
+        if ((Wait-Ready $process $options.Port).auth -ne 'off') { throw 'The localized authentication choice was not applied.' }
+        Stop-TestLauncher $process $options.Port
+        $output = $process.StandardOutput.ReadToEnd() + $process.StandardError.ReadToEnd()
+        if (-not $output.TrimStart().StartsWith($case.Language) -or -not $output.Contains($case.Expected) -or -not $output.Contains($case.Intro)) {
+            throw "The $($case.Language) setup was not localized: $output"
+        }
+    }
+}
+
 function New-BrowserProbe {
     $path = Join-Path $testRoot 'browser-probe.exe'
     $source = @'
@@ -286,10 +314,11 @@ try {
     Test-PersistentKey
     Test-MissingKeyFailsClosed
     Test-AuthenticationChoice
+    Test-LanguageChoice
     Test-BrowserLaunch
     Test-PortConflictDoesNotOpenBrowser
     Test-BuildAndRefresh
-    Write-Host 'Launcher checks passed: startup, protected key/data, authentication choice, restart, missing-key recovery, browser launch, port conflicts, and release builds.'
+    Write-Host 'Launcher checks passed: language, startup, protected key/data, authentication choice, restart, missing-key recovery, browser launch, port conflicts, and release builds.'
 } finally {
     foreach ($child in $children) {
         if ($child.Process.HasExited) { continue }

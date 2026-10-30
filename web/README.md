@@ -16,7 +16,7 @@ The executable is `target/release/speeching-web` on Linux and macOS and `target\
 
 ### Guided launchers
 
-On Windows, double-click the root-folder `start-web.cmd`. On Linux or macOS, run `bash start-web.sh` from the root folder. Each launcher builds the current Rust release when needed and opens a normal tab in the default browser; on a headless server it prints the address instead. Keep the launcher running while using the app and press Ctrl+C to stop it.
+On Windows, double-click the root-folder `start-web.cmd`. On Linux or macOS, run `bash start-web.sh` from the root folder. Choose English (`EN`), Spanish (`ES`), or Brazilian Portuguese (`PT`) first to use that language for the setup prompts. For unattended launches, set `SPEECHING_LAUNCHER_LANGUAGE` to `en`, `es`, or `pt` to skip the question. Each launcher builds the current Rust release when needed and opens a normal tab in the default browser; on a headless server it prints the address instead. Keep the launcher running while using the app and press Ctrl+C to stop it.
 
 The launcher asks whether to use built-in login or a shared guest and remembers the choice in the web data directory. Built-in accounts can register on the login page; if registration is disabled, the launcher prompts for the first account. The login page's **Forgot password?** action directs users to their server administrator. After verifying the user's identity, an administrator can reset that account with `start-web.cmd user add USERNAME` on Windows or `./start-web.sh user add USERNAME` on Linux/macOS. The account's conversations remain available. Recovery does not send email or reset a password automatically.
 

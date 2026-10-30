@@ -3,6 +3,7 @@ set -eu
 
 project_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 web_dir="$project_dir/web"
+translation_file="$web_dir/launcher-i18n.tsv"
 executable="$web_dir/target/release/speeching-web"
 open_browser=1
 build_release=1
@@ -11,12 +12,40 @@ server_pid=''
 command_args=()
 has_command=0
 
-fail() { printf 'Speeching web: %s\n' "$*" >&2; exit 1; }
-say() { printf '%s\n' "$*"; }
-usage() { fail 'Usage: start-web.sh [--no-open] [--no-build] [--auth builtin|off] [user add USERNAME]'; }
+select_language() {
+  language=${SPEECHING_LAUNCHER_LANGUAGE:-}
+  if [ -z "$language" ]; then
+    while :; do
+      printf 'Language / Idioma [EN/ES/PT] (EN): '
+      language=''; IFS= read -r language || true
+      case "$language" in ''|en|EN|es|ES|pt|PT) break ;; *) printf 'EN / ES / PT\n' ;; esac
+    done
+  fi
+  case "$language" in
+    ''|en|EN) language=en; language_column=2 ;;
+    es|ES) language=es; language_column=3 ;;
+    pt|PT) language=pt; language_column=4 ;;
+    *) printf 'SPEECHING_LAUNCHER_LANGUAGE: EN / ES / PT\n' >&2; exit 1 ;;
+  esac
+  SPEECHING_LAUNCHER_LANGUAGE=$language; export SPEECHING_LAUNCHER_LANGUAGE
+}
+
+message() {
+  key=$1; shift
+  value=$(awk -F '\t' -v key="$key" -v col="$language_column" '$1 == key { print $col; found=1; exit } END { if (!found) exit 1 }' "$translation_file") || exit 1
+  index=0
+  for argument in "$@"; do
+    token="{$index}"; value=${value//"$token"/"$argument"}; index=$((index + 1))
+  done
+  printf '%s' "$value"
+}
+
+fail() { printf 'Speeching web: %s\n' "$(message "$@")" >&2; exit 1; }
+say() { printf '%s\n' "$(message "$@")"; }
+usage() { fail usage_unix; }
 
 set_auth_override() {
-  case "$1" in builtin|off) auth_override=$1 ;; *) fail '--auth needs builtin or off.' ;; esac
+  case "$1" in builtin|off) auth_override=$1 ;; *) fail auth_argument ;; esac
 }
 
 set_user_command() {
@@ -52,51 +81,51 @@ detect_system() {
       if [ -r "$os_release" ]; then
         distro=$(sed -n 's/^ID=//p' "$os_release" | head -n 1 | tr -d '"\047')
       fi ;;
-    *) fail 'This launcher supports Linux and macOS. Use start-web.cmd on Windows.' ;;
+    *) fail wrong_system ;;
   esac
-  say "Detected ${distro:-Linux} ($system)."
+  say detected_system "${distro:-Linux}" "$system"
 }
 
 ask_yes() {
-  printf '%s [y/N] ' "$1"
+  printf '%s %s ' "$(message "$1")" "$(message confirm_hint)"
   answer=''
   IFS= read -r answer || true
-  case "$answer" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+  case "$answer" in y|Y|yes|YES|s|S|si|SI|sí|SÍ|sim|SIM) return 0 ;; *) return 1 ;; esac
 }
 
 as_root() {
   if [ "$(id -u)" -eq 0 ]; then "$@"; return; fi
-  command -v sudo >/dev/null 2>&1 || fail 'Install sudo or run the displayed package commands as an administrator.'
+  command -v sudo >/dev/null 2>&1 || fail need_sudo
   sudo "$@"
 }
 
 install_build_dependencies() {
   case "$distro" in
     ubuntu|debian)
-      ask_yes 'Install build tools and curl with apt?' || fail 'Install build-essential, pkg-config, curl, and ca-certificates, then rerun.'
+      ask_yes apt_ask || fail apt_missing
       as_root apt-get update
       as_root apt-get install -y build-essential pkg-config curl ca-certificates ;;
     fedora)
-      ask_yes 'Install build tools and curl with dnf?' || fail 'Install gcc, gcc-c++, make, pkgconf-pkg-config, curl, and ca-certificates, then rerun.'
+      ask_yes fedora_ask || fail fedora_missing
       as_root dnf install -y gcc gcc-c++ make pkgconf-pkg-config curl ca-certificates ;;
     macos)
-      ask_yes 'Open the Xcode command line tools installer?' || fail 'Install Xcode command line tools, then rerun.'
+      ask_yes xcode_ask || fail xcode_missing
       xcode-select --install || true
-      fail 'Complete the command line tools installation, then rerun this launcher.' ;;
-    *) fail 'Install a C compiler, make, and curl for this distribution, then rerun.' ;;
+      fail xcode_finish ;;
+    *) fail generic_missing ;;
   esac
 }
 
 install_rust() {
-  ask_yes 'Install the stable Rust toolchain with rustup?' || fail 'Install Rust 1.88 or newer, then rerun.'
+  ask_yes rust_ask || fail rust_missing
   installer=$(mktemp "${TMPDIR:-/tmp}/speeching-rustup.XXXXXX")
   if ! curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o "$installer"; then
     rm -f "$installer"
-    fail 'Could not download the Rust installer.'
+    fail rust_download_error
   fi
   if ! sh "$installer" -y --profile minimal --no-modify-path; then
     rm -f "$installer"
-    fail 'Rust installation did not complete.'
+    fail rust_install_error
   fi
   rm -f "$installer"
   PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
@@ -118,29 +147,29 @@ ensure_toolchain() {
 validate_rust_version() {
   version=$(rustc --version | awk '{print $2}')
   major=${version%%.*}; rest=${version#*.}; minor=${rest%%.*}
-  case "$major:$minor" in *[!0-9:]*) fail 'Could not determine the Rust version.' ;; esac
+  case "$major:$minor" in *[!0-9:]*) fail rust_version_unknown ;; esac
   if [ "$major" -lt 1 ] || { [ "$major" -eq 1 ] && [ "$minor" -lt 88 ]; }; then
-    fail 'Rust 1.88 or newer is required. Update Rust, then rerun.'
+    fail rust_version_old
   fi
 }
 
 release_needs_build() {
   [ -x "$executable" ] || return 0
   # Test-only modules do not affect the release binary.
-  [ -n "$(find "$web_dir/src" "$web_dir/static" "$web_dir/Cargo.toml" "$web_dir/Cargo.lock" -type f ! -name 'tests.rs' ! -name '*_tests.rs' -newer "$executable" -print | head -n 1)" ]
+  [ -n "$(find "$web_dir/src" "$web_dir/static" "$web_dir/Cargo.toml" "$web_dir/Cargo.lock" "$translation_file" -type f ! -name 'tests.rs' ! -name '*_tests.rs' -newer "$executable" -print | head -n 1)" ]
 }
 
 prepare_release() {
   if [ "$build_release" -eq 0 ]; then
-    [ -x "$executable" ] || fail 'The release executable is missing; rerun without --no-build.'
+    [ -x "$executable" ] || fail no_build_unix
     return
   fi
   if release_needs_build; then
     ensure_toolchain
-    say 'Building the current Rust web release...'
+    say building
     CARGO_TARGET_DIR="$web_dir/target" cargo build --manifest-path "$web_dir/Cargo.toml" --release --locked
   fi
-  [ -x "$executable" ] || fail 'The build did not produce the web executable.'
+  [ -x "$executable" ] || fail no_executable
 }
 
 resolve_web_path() {
@@ -154,7 +183,7 @@ default_data_directory() {
   for candidate in "$default_data" "$web_dir/speeching-web-data" "$project_dir/speeching-web-data"; do
     if [ -f "$candidate/speeching-web.sqlite3" ]; then found=$candidate; count=$((count + 1)); fi
   done
-  [ "$count" -le 1 ] || fail 'Multiple web databases found. Set SPEECHING_WEB_DATA to choose one.'
+  [ "$count" -le 1 ] || fail db_multiple
   if [ "$count" -eq 1 ]; then printf '%s\n' "$found"; else printf '%s\n' "$default_data"; fi
 }
 
@@ -164,7 +193,7 @@ prepare_key() {
   SPEECHING_MASTER_KEY_FILE=$(resolve_web_path "$key"); export SPEECHING_MASTER_KEY_FILE
   [ -f "$SPEECHING_MASTER_KEY_FILE" ] && return
   if [ -e "$SPEECHING_WEB_DATA/speeching-web.sqlite3" ] || [ -e "$SPEECHING_WEB_DATA/speeching-web.sqlite3-wal" ]; then
-    fail 'The existing database has no master key. Restore the original key before starting.'
+    fail key_missing
   fi
   create_master_key
 }
@@ -174,14 +203,14 @@ create_master_key() {
   mkdir -p "$key_dir"
   key_temp=$(mktemp "$key_dir/.speeching-key.XXXXXX")
   if ! key_value=$("$executable" keygen) || ! printf '%s' "$key_value" > "$key_temp" || ! chmod 600 "$key_temp"; then
-    rm -f "$key_temp"; fail 'Could not create a protected master key.'
+    rm -f "$key_temp"; fail key_create_error
   fi
   unset key_value
   if ! ln "$key_temp" "$SPEECHING_MASTER_KEY_FILE" 2>/dev/null && [ ! -f "$SPEECHING_MASTER_KEY_FILE" ]; then
-    rm -f "$key_temp"; fail 'Could not install the master key safely.'
+    rm -f "$key_temp"; fail key_install_error
   fi
   rm -f "$key_temp"
-  say 'Web master key is ready. Back it up securely to recover saved provider keys.'
+  say key_created
 }
 
 prepare_environment() {
@@ -193,18 +222,18 @@ prepare_environment() {
   if [ -z "${SPEECHING_ORIGIN:-}" ] && [ -n "${SPEECHING_LISTEN:-}" ]; then
     case "$SPEECHING_LISTEN" in
       127.0.0.1:*|'[::1]':*) SPEECHING_ORIGIN="http://$SPEECHING_LISTEN"; export SPEECHING_ORIGIN ;;
-      *) fail 'Set SPEECHING_ORIGIN to the browser origin for this listen address.' ;;
+      *) fail origin_required ;;
     esac
   fi
 }
 
 prompt_authentication() {
-  say 'Choose how people access Speeching web:'
-  say '  1) Built-in login and separate accounts (recommended)'
-  say '  2) No login (one shared guest; protect access externally)'
-  printf 'Choice [1]: '
+  say auth_intro
+  say auth_login
+  say auth_guest
+  printf '%s: ' "$(message auth_choice)"
   choice=''; IFS= read -r choice || true
-  case "$choice" in ''|1) SPEECHING_AUTH=builtin ;; 2) SPEECHING_AUTH=off ;; *) fail 'Choose 1 or 2 and restart.' ;; esac
+  case "$choice" in ''|1) SPEECHING_AUTH=builtin ;; 2) SPEECHING_AUTH=off ;; *) fail auth_invalid ;; esac
   printf '%s\n' "$SPEECHING_AUTH" > "$auth_file"
 }
 
@@ -220,7 +249,7 @@ select_authentication() {
   elif [ -n "${SPEECHING_AUTH:-}" ]; then return
   else load_authentication
   fi
-  case "$SPEECHING_AUTH" in builtin|off) ;; *) fail 'The saved launcher authentication setting is invalid.' ;; esac
+  case "$SPEECHING_AUTH" in builtin|off) ;; *) fail auth_saved_invalid ;; esac
   export SPEECHING_AUTH
 }
 
@@ -228,10 +257,10 @@ ensure_first_account() {
   [ "${SPEECHING_AUTH:-builtin}" = builtin ] || return 0
   [ "${SPEECHING_ALLOW_REGISTRATION:-true}" = false ] || return 0
   [ ! -f "$SPEECHING_WEB_DATA/speeching-web.sqlite3" ] || return 0
-  say 'Registration is disabled. Create the first web account.'
-  printf 'Username: '
+  say first_account_unix
+  printf '%s: ' "$(message username)"
   username=''; IFS= read -r username || true
-  [ -n "$username" ] || fail 'Account setup canceled. Run start-web.sh user add USERNAME to create an account.'
+  [ -n "$username" ] || fail account_cancel_unix
   "$executable" user add "$username"
 }
 
@@ -264,7 +293,7 @@ stop_server() {
 }
 
 start_service() {
-  say "Starting Speeching web at ${SPEECHING_ORIGIN:-http://127.0.0.1:8787}. Press Ctrl+C to stop."
+  say starting_unix "${SPEECHING_ORIGIN:-http://127.0.0.1:8787}"
   "$executable" & server_pid=$!
   trap stop_server EXIT
   trap 'stop_server; exit 130' INT TERM
@@ -274,6 +303,7 @@ start_service() {
   return "$result"
 }
 
+select_language
 parse_arguments "$@"
 detect_system
 prepare_release

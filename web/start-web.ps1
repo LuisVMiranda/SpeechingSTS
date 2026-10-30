@@ -2,7 +2,6 @@
 param(
     [switch]$NoOpen,
     [switch]$NoBuild,
-    [ValidateSet('builtin', 'off')]
     [string]$AuthMode,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Command = @()
@@ -13,6 +12,38 @@ $ErrorActionPreference = 'Stop'
 $webRoot = $PSScriptRoot
 $executable = Join-Path $webRoot 'target\release\speeching-web.exe'
 $manifest = Join-Path $webRoot 'Cargo.toml'
+$translationFile = Join-Path $webRoot 'launcher-i18n.tsv'
+$script:messages = @{}
+$locationPushed = $false
+$previousOutputEncoding = [Console]::OutputEncoding
+
+function Get-LauncherText([string]$Key, [object[]]$Values = @()) {
+    $value = $script:messages[$Key]
+    if ($null -eq $value) { throw "Missing launcher translation: $Key" }
+    for ($index = 0; $index -lt $Values.Count; $index++) {
+        $value = $value.Replace("{$index}", [string]$Values[$index])
+    }
+    return $value
+}
+
+function Initialize-Language {
+    $selected = $env:SPEECHING_LAUNCHER_LANGUAGE
+    if (-not $selected) {
+        do {
+            $selected = Normalize-AuthenticationChoice ([string](Read-Host 'Language / Idioma [EN/ES/PT] (EN)'))
+            if (-not $selected) { $selected = 'en' }
+            if ($selected.ToLowerInvariant() -notin @('en', 'es', 'pt')) { Write-Host 'EN / ES / PT' }
+        } while ($selected.ToLowerInvariant() -notin @('en', 'es', 'pt'))
+    }
+    $language = $selected.Trim().ToLowerInvariant()
+    if ($language -notin @('en', 'es', 'pt')) { throw 'SPEECHING_LAUNCHER_LANGUAGE: EN / ES / PT' }
+    $env:SPEECHING_LAUNCHER_LANGUAGE = $language
+    $column = switch ($language) { 'es' { 2 } 'pt' { 3 } default { 1 } }
+    foreach ($line in [IO.File]::ReadAllLines($translationFile, [Text.Encoding]::UTF8)) {
+        $fields = $line.Split([char]9)
+        if ($fields.Count -eq 4) { $script:messages[$fields[0]] = $fields[$column] }
+    }
+}
 
 function Test-ReleaseCurrent {
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { return $false }
@@ -21,6 +52,7 @@ function Test-ReleaseCurrent {
     $inputs = @(
         Get-Item -LiteralPath $manifest
         Get-Item -LiteralPath (Join-Path $webRoot 'Cargo.lock')
+        Get-Item -LiteralPath $translationFile
         Get-ChildItem -LiteralPath (Join-Path $webRoot 'src') -File -Recurse | Where-Object { $_.Name -notmatch '(^tests|_tests)\.rs$' }
         Get-ChildItem -LiteralPath (Join-Path $webRoot 'static') -File -Recurse
     )
@@ -30,23 +62,23 @@ function Test-ReleaseCurrent {
 function Prepare-Release {
     if ($NoBuild -or (Test-ReleaseCurrent)) {
         if (Test-Path -LiteralPath $executable -PathType Leaf) { return }
-        throw 'The web executable is missing. Install Rust and run start-web.cmd without -NoBuild.'
+        throw (Get-LauncherText 'no_build_windows')
     }
     $cargo = Get-Command cargo -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $cargo) {
-        throw 'The web executable is missing or older than its source. Install Rust and Windows build tools, then run start-web.cmd again.'
+        throw (Get-LauncherText 'no_cargo_windows')
     }
-    Write-Host 'Building the current Rust web release...'
+    Write-Host (Get-LauncherText 'building')
     $previousTarget = $env:CARGO_TARGET_DIR
     try {
         $env:CARGO_TARGET_DIR = Join-Path $webRoot 'target'
         & $cargo.Source build --manifest-path $manifest --release --locked
-        if ($LASTEXITCODE -ne 0) { throw 'The web release could not be built. See the errors above.' }
+        if ($LASTEXITCODE -ne 0) { throw (Get-LauncherText 'build_failed') }
     } finally {
         $env:CARGO_TARGET_DIR = $previousTarget
     }
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-        throw 'The build finished without producing speeching-web.exe.'
+        throw (Get-LauncherText 'no_executable')
     }
 }
 
@@ -88,7 +120,7 @@ function Resolve-WebPath([string]$Path) {
 
 function Get-DefaultDataDirectory {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
-        throw 'LOCALAPPDATA is unavailable. Set SPEECHING_WEB_DATA to a private directory.'
+        throw (Get-LauncherText 'localapp_missing')
     }
     $locations = @(
         (Join-Path $env:LOCALAPPDATA 'SpeechingWeb')
@@ -97,7 +129,7 @@ function Get-DefaultDataDirectory {
     )
     $existing = @($locations | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'speeching-web.sqlite3') -PathType Leaf })
     if ($existing.Count -gt 1) {
-        throw 'Multiple web databases were found. Set SPEECHING_WEB_DATA to the one you want to use.'
+        throw (Get-LauncherText 'db_multiple')
     }
     if ($existing.Count -eq 1) { return $existing[0] }
     return $locations[0]
@@ -129,17 +161,17 @@ function New-PrivateMasterKey([string]$Path) {
     }
     if ($failure) {
         if ($created) { Remove-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue }
-        throw "Could not securely create the web master key. $failure"
+        throw "$(Get-LauncherText 'key_create_error') $failure"
     }
 }
 
 function Set-LocalOrigin {
     if ($env:SPEECHING_ORIGIN -or -not $env:SPEECHING_LISTEN) { return }
     try { $uri = [Uri]("http://{0}/" -f $env:SPEECHING_LISTEN) } catch {
-        throw 'Set SPEECHING_ORIGIN to the browser origin for this listen address.'
+        throw (Get-LauncherText 'origin_required')
     }
     if ($uri.Host -notin @('127.0.0.1', '[::1]', '::1') -or $uri.Port -eq 0) {
-        throw 'Set SPEECHING_ORIGIN to the browser origin for this listen address.'
+        throw (Get-LauncherText 'origin_required')
     }
     $env:SPEECHING_ORIGIN = $uri.GetLeftPart([System.UriPartial]::Authority)
 }
@@ -152,17 +184,17 @@ function Initialize-WebEnvironment {
     $env:SPEECHING_WEB_DATA = Resolve-WebPath $env:SPEECHING_WEB_DATA
     $database = Join-Path $env:SPEECHING_WEB_DATA 'speeching-web.sqlite3'
     if (-not $env:SPEECHING_MASTER_KEY_FILE -and -not $env:SPEECHING_MASTER_KEY) {
-        if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) { throw 'USERPROFILE is unavailable. Set SPEECHING_MASTER_KEY_FILE to a protected key file.' }
+        if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) { throw (Get-LauncherText 'profile_missing') }
         $env:SPEECHING_MASTER_KEY_FILE = Join-Path $env:USERPROFILE '.config\speeching-web\master.key'
     }
     if ($env:SPEECHING_MASTER_KEY_FILE) {
         $env:SPEECHING_MASTER_KEY_FILE = Resolve-WebPath $env:SPEECHING_MASTER_KEY_FILE
         if (-not (Test-Path -LiteralPath $env:SPEECHING_MASTER_KEY_FILE -PathType Leaf)) {
             if ((Test-Path -LiteralPath $database) -or (Test-Path -LiteralPath "$database-wal")) {
-                throw 'The web database already exists but its master key is missing. Restore the original key; a replacement would make saved API keys unreadable.'
+                throw (Get-LauncherText 'key_missing')
             }
             New-PrivateMasterKey $env:SPEECHING_MASTER_KEY_FILE
-            Write-Host 'Created a protected web master key. Back it up securely; it is needed to recover saved provider keys.'
+            Write-Host (Get-LauncherText 'key_created')
         }
     }
     Ensure-PrivateDirectory $env:SPEECHING_WEB_DATA
@@ -171,18 +203,18 @@ function Initialize-WebEnvironment {
 
 function Invoke-AccountCommand([string[]]$Arguments) {
     if ($Arguments.Count -ne 3 -or $Arguments[0] -ne 'user' -or $Arguments[1] -ne 'add') {
-        throw 'Usage: start-web.cmd [-NoOpen] [-NoBuild] [user add USERNAME]'
+        throw (Get-LauncherText 'usage_windows')
     }
     & $executable @Arguments
-    if ($LASTEXITCODE -ne 0) { throw 'The account was not saved.' }
+    if ($LASTEXITCODE -ne 0) { throw (Get-LauncherText 'account_save_failed') }
 }
 
 function Initialize-Account([string]$Database) {
     $mode = if ($env:SPEECHING_AUTH) { $env:SPEECHING_AUTH } else { 'builtin' }
     if ($mode -ne 'builtin' -or $env:SPEECHING_ALLOW_REGISTRATION -ne 'false' -or (Test-Path -LiteralPath $Database)) { return }
-    Write-Host 'Create the first web account. The password is not displayed while you type.'
-    $username = Read-Host 'Username'
-    if ([string]::IsNullOrWhiteSpace($username)) { throw 'Account setup canceled. Run start-web.cmd again to create an account.' }
+    Write-Host (Get-LauncherText 'first_account_windows')
+    $username = Read-Host (Get-LauncherText 'username')
+    if ([string]::IsNullOrWhiteSpace($username)) { throw (Get-LauncherText 'account_cancel_windows') }
     Invoke-AccountCommand @('user', 'add', $username)
 }
 
@@ -198,6 +230,7 @@ function Normalize-AuthenticationChoice([string]$Value) {
 function Initialize-Authentication {
     $setting = Join-Path $env:SPEECHING_WEB_DATA 'launcher-auth'
     if ($AuthMode) {
+        if ($AuthMode -notin @('builtin', 'off')) { throw (Get-LauncherText 'auth_argument') }
         $env:SPEECHING_AUTH = $AuthMode
         [IO.File]::WriteAllText($setting, $AuthMode)
     } elseif ($env:SPEECHING_AUTH) {
@@ -205,26 +238,26 @@ function Initialize-Authentication {
     } elseif (Test-Path -LiteralPath $setting -PathType Leaf) {
         $env:SPEECHING_AUTH = [IO.File]::ReadAllText($setting).Trim()
     } else {
-        Write-Host 'Choose how people access Speeching web:'
-        Write-Host '  1) Built-in login and separate accounts (recommended)'
-        Write-Host '  2) No login (one shared guest; protect access externally)'
-        $choice = Normalize-AuthenticationChoice ([string](Read-Host 'Choice [1]'))
+        Write-Host (Get-LauncherText 'auth_intro')
+        Write-Host (Get-LauncherText 'auth_login')
+        Write-Host (Get-LauncherText 'auth_guest')
+        $choice = Normalize-AuthenticationChoice ([string](Read-Host (Get-LauncherText 'auth_choice')))
         switch ($choice) {
             { $_ -eq '' -or $_ -eq '1' } { $env:SPEECHING_AUTH = 'builtin' }
             '2' { $env:SPEECHING_AUTH = 'off' }
-            default { throw 'Choose 1 or 2 and restart.' }
+            default { throw (Get-LauncherText 'auth_invalid') }
         }
         [IO.File]::WriteAllText($setting, $env:SPEECHING_AUTH)
     }
     if ($env:SPEECHING_AUTH -notin @('builtin', 'off')) {
-        throw 'The saved launcher authentication setting is invalid.'
+        throw (Get-LauncherText 'auth_saved_invalid')
     }
 }
 
 function Open-PracticeTab([string]$Url) {
     $browser = $env:SPEECHING_WEB_BROWSER
     if ($browser -and -not (Test-Path -LiteralPath $browser -PathType Leaf)) {
-        Write-Host "The configured browser was not found. Open $Url manually."
+        Write-Host (Get-LauncherText 'browser_not_found' @($Url))
         return
     }
     $masterKey = $env:SPEECHING_MASTER_KEY
@@ -238,7 +271,7 @@ function Open-PracticeTab([string]$Url) {
             Start-Process -FilePath $Url | Out-Null
         }
     } catch {
-        Write-Host "Could not open the browser. Open $Url manually."
+        Write-Host (Get-LauncherText 'browser_open_failed' @($Url))
     } finally {
         $env:SPEECHING_MASTER_KEY = $masterKey
         $env:SPEECHING_PROXY_SECRET = $proxySecret
@@ -247,8 +280,8 @@ function Open-PracticeTab([string]$Url) {
 
 function Start-WebService {
     $url = if ($env:SPEECHING_ORIGIN) { $env:SPEECHING_ORIGIN.TrimEnd('/') } else { 'http://127.0.0.1:8787' }
-    Write-Host "Starting Speeching web. Open $url if a browser does not appear."
-    Write-Host 'Keep this window open; press Ctrl+C to stop the web service.'
+    Write-Host (Get-LauncherText 'starting_windows' @($url))
+    Write-Host (Get-LauncherText 'keep_open')
     $opened = $false
     $previousPreference = $ErrorActionPreference
     try {
@@ -260,14 +293,17 @@ function Start-WebService {
                 Open-PracticeTab "$url/"
             }
         }
-        if ($LASTEXITCODE -ne 0) { throw "The web service exited with code $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) { throw (Get-LauncherText 'service_exit' @($LASTEXITCODE)) }
     } finally {
         $ErrorActionPreference = $previousPreference
     }
 }
 
 try {
+    [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+    Initialize-Language
     Push-Location -LiteralPath $webRoot
+    $locationPushed = $true
     Prepare-Release
     $database = Initialize-WebEnvironment
     if ($Command.Count -gt 0) {
@@ -279,7 +315,11 @@ try {
     }
 } catch {
     Write-Host "Speeching web: $_" -ForegroundColor Red
+    if ($env:SPEECHING_LAUNCHER_NO_PAUSE -ne '1' -and $script:messages.ContainsKey('press_enter')) {
+        [void](Read-Host (Get-LauncherText 'press_enter'))
+    }
     exit 1
 } finally {
-    Pop-Location
+    if ($locationPushed) { Pop-Location }
+    [Console]::OutputEncoding = $previousOutputEncoding
 }
