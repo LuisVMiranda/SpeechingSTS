@@ -132,11 +132,41 @@ install_rust() {
   export PATH
 }
 
+ca_certificates_available() {
+  if [ "$system" = Darwin ]; then
+    security find-certificate -a /System/Library/Keychains/SystemRootCertificates.keychain >/dev/null 2>&1
+    return
+  fi
+  for bundle in "${SSL_CERT_FILE:-}" /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/ca-bundle.pem; do
+    [ -n "$bundle" ] && test -s "$bundle" && return 0
+  done
+  return 1
+}
+
+ensure_macos_pkg_config() {
+  command -v pkg-config >/dev/null 2>&1 && return
+  command -v brew >/dev/null 2>&1 || fail mac_pkg_config_missing
+  ask_yes mac_pkg_config_ask || fail mac_pkg_config_missing
+  brew install pkgconf
+  command -v pkg-config >/dev/null 2>&1 || fail mac_pkg_config_missing
+}
+
 ensure_toolchain() {
   missing=0
   for tool in cc make curl; do command -v "$tool" >/dev/null 2>&1 || missing=1; done
   if [ "$system" = Darwin ] && ! xcode-select -p >/dev/null 2>&1; then missing=1; fi
+  if [ "$system" = Linux ]; then
+    command -v pkg-config >/dev/null 2>&1 || missing=1
+    ca_certificates_available || missing=1
+  fi
   [ "$missing" -eq 0 ] || install_build_dependencies
+  if [ "$system" = Darwin ]; then
+    ensure_macos_pkg_config
+    ca_certificates_available || fail mac_ca_missing
+  else
+    for tool in cc make curl pkg-config; do command -v "$tool" >/dev/null 2>&1 || fail generic_missing; done
+    ca_certificates_available || fail linux_ca_missing
+  fi
   if ! command -v cargo >/dev/null 2>&1 && [ -x "${CARGO_HOME:-$HOME/.cargo}/bin/cargo" ]; then
     PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"; export PATH
   fi

@@ -108,6 +108,10 @@ SCRIPT
 #!/bin/sh
 printf 'rustc 1.99.0\n'
 SCRIPT
+  for tool in cc make curl; do
+    printf '#!/bin/sh\nexit 0\n' > "$fake/$tool"
+    chmod +x "$fake/$tool"
+  done
   cat > "$fake/cargo" <<'SCRIPT'
 #!/bin/sh
 printf 'cargo:%s\n' "$*" >> "$SPEECHING_TEST_TRACE"
@@ -122,10 +126,15 @@ SCRIPT
     cat > "$fake/$tool" <<'SCRIPT'
 #!/bin/sh
 printf '%s:%s\n' "${0##*/}" "$*" >> "$SPEECHING_TEST_TRACE"
+if [ "${1:-}" = install ]; then
+  printf '#!/bin/sh\nexit 0\n' > "${0%/*}/pkg-config"
+  chmod +x "${0%/*}/pkg-config"
+fi
 SCRIPT
   done
   chmod +x "$fake/id" "$fake/rustc" "$fake/cargo" "$fake/apt-get" "$fake/dnf"
   for distro in ubuntu debian fedora; do
+    rm -f "$fake/pkg-config"
     fixture="$temp/fixture-$distro"
     mkdir -p "$fixture/web/src" "$fixture/web/static" "$fixture/data"
     : > "$fixture/web/Cargo.toml"
@@ -159,6 +168,20 @@ PY
   done
 }
 
+test_certificate_detection() {
+  eval "$(sed -n '/^ca_certificates_available() {/,/^}/p' "$project/start-web.sh")"
+  system=Linux
+  SSL_CERT_FILE="$temp/test-ca.pem"
+  printf 'certificate fixture\n' > "$SSL_CERT_FILE"
+  ca_certificates_available
+  ( test() { return 1; }; if ca_certificates_available; then exit 1; fi )
+  system=Darwin
+  security() { return 0; }
+  ca_certificates_available
+  security() { return 1; }
+  if ca_certificates_available; then return 1; fi
+}
+
 test_language_choice() {
   for language in ES PT; do
     port=$(free_port)
@@ -180,4 +203,5 @@ test_missing_key
 test_auth_override
 test_language_choice
 test_distro_commands
+test_certificate_detection
 echo 'Unix launcher checks passed: choice, permissions, key persistence, recovery guard, authentication override, and package commands.'
