@@ -3,7 +3,7 @@
 :root[data-theme="dark"]{color-scheme:dark;color:#e9f0fa;background:#0e1724;--surface:#182536;--ink:#e9f0fa;--muted:#aabbd0;--line:#39495d;--blue:#578bff;--blue-dark:#7ba3ff;--soft:#233a5c;--shadow:0 18px 50px rgba(0,0,0,.3)}
 
 *{box-sizing:border-box}
-body{margin:0;min-width:300px;min-height:100vh;padding:32px 20px 60px}
+body{margin:0;min-width:300px;min-height:100vh;padding:32px 20px 0;display:flex;flex-direction:column}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer}
 button:disabled{cursor:not-allowed;opacity:.55}
@@ -23,10 +23,10 @@ svg{display:block}
 button svg{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 [hidden]{display:none!important}
 
-.shell{max-width:1030px;margin:auto}
-.topbar{max-width:500px;margin:0 auto 18px;display:flex;align-items:center;justify-content:space-between}
+.shell{width:100%;max-width:1030px;margin:0 auto;flex:1}
+.topbar{width:100%;max-width:948px;margin:0 auto 18px;display:flex;align-items:center;justify-content:space-between}
 .brand{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:1.03rem;letter-spacing:-.025em}
-.brand-mark{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:#2768ed;color:white;font-family:Georgia,serif;font-size:18px;font-style:italic;font-weight:bold;letter-spacing:-.08em;padding-right:2px}
+.brand-mark{display:block;width:32px;height:32px;border-radius:9px}
 .tools{display:flex;gap:8px}
 .icon-button{display:grid;place-items:center;width:40px;height:40px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:11px}
 .icon-button:hover,.icon-button[aria-expanded="true"]{background:var(--soft);color:var(--blue-dark);border-color:var(--blue)}
@@ -70,7 +70,7 @@ to{transform:scaleY(1.25)}
 .message{padding:9px 12px;margin:7px 0;border-radius:10px;background:var(--soft);font-size:.85rem;line-height:1.45;overflow-wrap:anywhere}
 .message.user{background:transparent;border:1px solid var(--line)}
 .message b{display:block;color:var(--muted);font-size:.8rem;margin-bottom:3px}
-.drawer{padding:23px;max-height:calc(100vh - 100px);overflow:auto}
+.drawer{padding:23px;min-width:0}
 .panel-heading{display:flex;justify-content:space-between;gap:14px;margin-bottom:24px}
 .panel-heading p{color:var(--muted);font-size:.82rem;margin-top:5px}
 .close{font-size:1.4rem;line-height:1;flex:none}
@@ -83,7 +83,7 @@ to{transform:scaleY(1.25)}
 .chat-row strong{display:block;font-size:.86rem;line-height:1.35;overflow-wrap:anywhere}
 .meta{display:block;color:var(--muted);font-size:.8rem;margin-top:5px;font-variant-numeric:tabular-nums}
 .log{margin-top:23px;padding-top:20px;border-top:1px solid var(--line)}
-.log-messages{max-height:260px;overflow:auto;margin-top:12px}
+.log-messages{margin-top:12px}
 .log-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
 .quiet{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 10px;color:var(--ink);font-size:.78rem}
 .quiet:hover{background:var(--soft)}
@@ -114,13 +114,15 @@ to{transform:scaleY(1.25)}
 .auth-command span{color:var(--muted);font-size:.76rem;font-weight:650}
 .auth-command code{padding:10px 12px;border-radius:9px;background:var(--soft);color:var(--ink);font-size:.78rem;overflow-wrap:anywhere}
 .notice{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:min(90vw,520px);background:#182439;color:#fff;border-radius:10px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-size:.85rem;z-index:4}
+.site-footer{width:100%;max-width:948px;margin:30px auto 0;padding:18px 0 24px;border-top:1px solid var(--line);text-align:center;color:var(--muted);font-size:.76rem;font-variant-numeric:tabular-nums}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 *{scrollbar-color:#9aacbf transparent;scrollbar-width:thin}
 
-@media(max-width:800px){body{padding:18px 14px 40px}
+@media(max-width:800px){body{padding:18px 14px 0}
 .workspace:has(.drawer:not([hidden])){grid-template-columns:minmax(0,500px)}
-.drawer{max-height:none}
+.topbar,.site-footer{max-width:500px}
 .topbar{margin-bottom:12px}
+.site-footer{padding-bottom:18px}
 .stage{padding-top:25px}
 }
 

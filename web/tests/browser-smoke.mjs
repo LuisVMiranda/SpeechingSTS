@@ -144,6 +144,12 @@ try {
   service = spawn(executable, [], { env, cwd:project, windowsHide:true, stdio:'ignore' });
   service.on('error', () => {});
   await waitFor(async () => (await fetch(`http://127.0.0.1:${servicePort}/api/mode`)).ok, 'Rust service did not start');
+  const logoResponse = await fetch(`${origin}/speeching/icon.png`);
+  if (!logoResponse.ok || !logoResponse.headers.get('content-type')?.startsWith('image/png')) throw new Error('The embedded logo was not served as a PNG');
+  const logoBytes = Buffer.from(await logoResponse.arrayBuffer());
+  if (!logoBytes.equals(readFileSync(path.join(project, 'static', 'icon.png')))) throw new Error('The served logo differs from the web asset');
+  const officialLogo = path.join(project, '..', 'assets', 'icon.png');
+  if (existsSync(officialLogo) && !logoBytes.equals(readFileSync(officialLogo))) throw new Error('The web logo differs from the original Speeching asset');
   seedHistory(dataDir);
   const profile = path.join(temp, 'chrome');
   chrome = spawn(chromePath, ['--headless=new','--disable-gpu','--no-first-run','--disable-extensions','--disable-background-networking','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--autoplay-policy=no-user-gesture-required','--remote-debugging-port=0',`--user-data-dir=${profile}`,'about:blank'], { windowsHide:true, stdio:'ignore' });
@@ -160,12 +166,52 @@ try {
     if (dimensions.width !== width || dimensions.page > width) throw new Error(`${name} has horizontal overflow`);
     await capture(cdp, name);
   }
+  for (const [name,width,height,mobile] of [['desktop',1200,720,false],['intermediate',820,640,false],['small',320,568,true],['mobile',390,844,true]]) {
+    await cdp.call('Emulation.setDeviceMetricsOverride', { width,height,deviceScaleFactor:1,mobile });
+    await cdp.call('Page.navigate', { url:`${origin}/speeching/` });
+    await waitFor(() => evaluate(cdp, "document.readyState === 'complete' && document.getElementById('workspace')?.hidden === false"), 'Practice view did not load');
+    await evaluate(cdp, `(async () => {
+      const el = id => document.getElementById(id);
+      const logo = document.querySelector('.brand-mark');
+      if (!logo.complete || logo.naturalWidth !== 256 || logo.alt !== '') throw Error('Brand asset did not load accessibly');
+      if (el('current-year').textContent !== String(new Date().getFullYear())) throw Error('Footer year is not current');
+      const togglePosition = el('settings-toggle').getBoundingClientRect().right;
+      el('settings-toggle').click();
+      if (Math.abs(el('settings-toggle').getBoundingClientRect().right - togglePosition) > 2) throw Error('Header controls shifted when settings opened');
+      const panel = el('settings-panel'), page = document.scrollingElement;
+      if (getComputedStyle(panel).overflowY !== 'visible' || panel.scrollHeight > panel.clientHeight + 1) throw Error('Settings has an inner vertical scroll');
+      if (page.scrollHeight <= innerHeight || page.scrollWidth > innerWidth) throw Error('Page scrolling or responsive width is incorrect');
+      if (innerWidth > 800) {
+        const header = document.querySelector('.topbar').getBoundingClientRect();
+        const practice = document.querySelector('.practice').getBoundingClientRect();
+        const drawer = panel.getBoundingClientRect();
+        if (Math.abs(header.left - practice.left) > 2 || Math.abs(header.right - drawer.right) > 2) throw Error('Header is not aligned with the workspace');
+      }
+      if (document.querySelector('.site-footer').getBoundingClientRect().top < panel.getBoundingClientRect().bottom) throw Error('Footer overlaps settings');
+    })()`);
+    if (name === 'small') await evaluate(cdp, `(async () => {
+      const form = document.getElementById('settings-form');
+      form.elements.ui_language.value = 'es'; form.requestSubmit();
+      if (document.documentElement.lang !== 'es' || document.scrollingElement.scrollWidth > innerWidth) throw Error('Spanish settings do not fit a narrow viewport');
+      form.elements.ui_language.value = 'en'; form.requestSubmit();
+    })()`);
+    if (name === 'desktop') { await evaluate(cdp, "document.documentElement.dataset.theme = 'dark'"); await delay(300); await capture(cdp, 'layout-desktop-settings'); }
+    if (name === 'mobile') await capture(cdp, 'layout-mobile-settings');
+    await evaluate(cdp, `(() => {
+      const save = document.querySelector('#settings-form button[type="submit"]');
+      save.scrollIntoView({block:'end'});
+      if (save.getBoundingClientRect().bottom > innerHeight + 1) throw Error('Page scrolling did not reach the save button');
+      document.querySelector('.site-footer').scrollIntoView({block:'end'});
+      if (document.querySelector('.site-footer').getBoundingClientRect().bottom > innerHeight + 1) throw Error('Page scrolling did not reach the footer');
+    })()`);
+  }
   await evaluate(cdp, `(async () => {
     const wait = () => new Promise(resolve => setTimeout(resolve,200)); const el = id => document.getElementById(id);
     el('history-toggle').click(); await wait();
     if (document.activeElement.id !== 'history-title' || el('history-panel').getBoundingClientRect().top > innerHeight) throw Error('Mobile panel focus failed');
     el('chat-list').querySelector('button').click(); await wait();
     if (!el('log-messages').textContent.includes('<img src=x onerror=alert(1)>') || el('log-messages').querySelector('img')) throw Error('History was not rendered as text');
+    if (getComputedStyle(el('history-panel')).overflowY !== 'visible' || getComputedStyle(el('log-messages')).overflowY !== 'visible') throw Error('Saved history has an inner vertical scroll');
     el('settings-toggle').click(); el('mic').click(); await wait();
     if (el('settings-panel').hidden || document.activeElement.id !== 'api-key' || !el('notice').textContent.includes('API key')) throw Error('Missing-key recovery did not focus the key field');
   })()`);
@@ -250,7 +296,7 @@ try {
     el('forgot-password').click();
     if (el('recovery-help').hidden || !el('recovery-help').textContent.includes('administrador')) throw Error('Localized recovery guidance failed');
   })()`);
-  console.log(JSON.stringify({ browserAudio:true, audioChunks, localizedProviderError:true, mountedPath:true, privateTextEscaped:true, shortcutRemapped:true, assistiveToggle:true, logAutoOpened:true, portuguese:true, darkMode:true, registration:true, administratorRecovery:true }));
+  console.log(JSON.stringify({ pageScrolling:true, logoAndFooter:true, browserAudio:true, audioChunks, localizedProviderError:true, mountedPath:true, privateTextEscaped:true, shortcutRemapped:true, assistiveToggle:true, logAutoOpened:true, portuguese:true, darkMode:true, registration:true, administratorRecovery:true }));
 } finally {
   devtools?.close(); chrome?.kill(); service?.kill();
   for (const socket of connections) socket.destroy();

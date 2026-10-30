@@ -171,6 +171,7 @@ fn app(state: AppState) -> Router {
         .route("/i18n.js", get(i18n_javascript))
         .route("/worklet.js", get(worklet))
         .route("/style.css", get(stylesheet))
+        .route("/icon.png", get(logo))
         .route("/api/mode", get(api::mode))
         .route("/api/login", post(api::login))
         .route("/api/register", post(accounts::register))
@@ -234,5 +235,11 @@ async fn stylesheet() -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
         include_str!("../static/style.css"),
+    )
+}
+async fn logo() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "image/png")],
+        include_bytes!("../static/icon.png").as_slice(),
     )
 }

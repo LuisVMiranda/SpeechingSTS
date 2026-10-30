@@ -107,15 +107,15 @@ Blue identifies the microphone, primary actions, focus, and interactive emphasis
 
 ## Typography
 
-The interface uses the Segoe UI system stack. Field labels and compact controls use small, weighted text; section headings are modest rather than display-sized. The brand mark alone uses italic Georgia.
+The interface uses the Segoe UI system stack. Field labels and compact controls use small, weighted text; section headings are modest rather than display-sized. The brand uses the original gem-textured Speeching icon.
 
 The frontmatter records the recurring brand, section-heading, field-label, and primary-button styles. Transcript messages use a readable line height (1.45); empty-state text uses a slightly more open line height (1.5). Timers and history metadata use tabular numerals.
 
 ## Layout
 
-The outer shell is centered and capped at 1030px. The practice surface and header each cap at 500px; an open drawer adds a second column, up to 430px wide, with an 18px gap. At 800px and below, the drawer stacks below the practice surface. At 390px and below, settings and history controls collapse to one column, horizontal panel padding tightens, and the microphone becomes 120px.
+The outer shell is centered and capped at 1030px. The practice surface caps at 500px; an open drawer adds a second column, up to 430px wide, with an 18px gap. The header stays aligned to the full workspace width so its controls do not move when a drawer opens. A quiet footer follows the page content. At 800px and below, the drawer stacks below the practice surface. At 390px and below, settings and history controls collapse to one column, horizontal panel padding tightens, and the microphone becomes 120px.
 
-The practice panel places the conversation selector above the centered microphone, status, timer, waveform, and transcript. History and settings use the same inset panel language. Transcript and history message areas scroll within bounded heights.
+The practice panel places the conversation selector above the centered microphone, status, timer, waveform, and transcript. History and settings use the same inset panel language and expand with the page. The live transcript scrolls within a bounded height so incoming speech does not move the page.
 
 ## Elevation & Depth
 
@@ -131,7 +131,7 @@ Panels have rounded corners, inputs and buttons use smaller radii, and the micro
 - **Buttons:** Primary buttons have a blue fill and white text. Utility buttons are bordered squares, while secondary actions use quiet bordered or text-only treatments. Disabled buttons reduce opacity.
 - **Fields:** Inputs and selects use the current surface, ink, and border colors, with a minimum height of 42px. Labels sit above their controls.
 - **Transcript:** Assistant messages use the soft theme fill; user messages use a transparent fill and a thin border. Both share rounded corners and wrap long content.
-- **History and settings:** A rounded, shadowed drawer holds compact controls, divided sections, and scrollable content. Conversation rows change to the stronger accent when hovered or selected.
+- **History and settings:** A rounded, shadowed drawer holds compact controls and divided sections. The page scrolls to reveal longer content. Conversation rows change to the stronger accent when hovered or selected.
 - **Activity:** The blue waveform gains opacity and animates while active. Reduced-motion preferences reduce animation and transition durations.
 
 **The Visible Focus Rule.** Buttons, inputs, and selects show a 3px theme-accent outline with a 3px offset on keyboard focus.

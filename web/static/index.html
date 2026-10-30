@@ -5,18 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Speeching</title>
+  <link rel="icon" href="./icon.png" type="image/png">
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Speeching home"><img class="brand-mark" src="./icon.png" width="32" height="32" alt=""><span>Speeching</span></a>
+    <nav id="workspace-tools" class="tools" aria-label="Workspace" hidden>
+      <button class="icon-button" id="history-toggle" type="button" aria-label="Conversation history" title="Conversation history" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg></button>
+      <button class="icon-button" id="settings-toggle" type="button" aria-label="Settings" title="Settings" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg></button>
+    </nav>
+  </header>
   <main class="shell">
-    <header class="topbar">
-      <a class="brand" href="./" aria-label="Speeching home"><span class="brand-mark">sp</span><span>Speeching</span></a>
-      <nav id="workspace-tools" class="tools" aria-label="Workspace" hidden>
-        <button class="icon-button" id="history-toggle" type="button" aria-label="Conversation history" title="Conversation history" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h11"/></svg></button>
-        <button class="icon-button" id="settings-toggle" type="button" aria-label="Settings" title="Settings" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M9 4v6m6 4v6"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg></button>
-      </nav>
-    </header>
 
     <section id="login-view" class="login-view" hidden>
       <h1 id="auth-heading" tabindex="-1" data-i18n="welcome">Welcome back</h1>
@@ -100,5 +101,6 @@
     </div>
     <p id="notice" class="notice" role="status" hidden></p>
   </main>
+  <footer class="site-footer">&copy; <time id="current-year"></time> Speeching</footer>
 </body>
 </html>

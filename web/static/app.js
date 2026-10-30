@@ -3,6 +3,9 @@ import { createAuth } from './auth.js';
 import { t, translate } from './i18n.js';
 
 const $ = id => document.getElementById(id);
+const year = String(new Date().getFullYear());
+$('current-year').textContent = year;
+$('current-year').dateTime = year;
 const form = $('settings-form');
 const defaults = { provider:'gemini', language:'Spanish', level:'Intermediate', voice:'Aoede', pace:'normal', input_mode:'voice', shortcut:'Space', preferences:'', auto_open_log:false, ui_language:'en', theme:'light' };
 const languages = [['English','en'],['Spanish','es'],['Portuguese','pt'],['Portuguese (Brazil)','pt-BR'],['Portuguese (Portugal)','pt-PT'],['French','fr'],['German','de'],['Italian','it'],['Japanese','ja'],['Korean','ko'],['Mandarin Chinese','zh'],['Hindi','hi'],['Arabic','ar'],['Dutch','nl'],['Polish','pl'],['Russian','ru'],['Turkish','tr'],['Indonesian','id'],['Vietnamese','vi'],['Thai','th']];
