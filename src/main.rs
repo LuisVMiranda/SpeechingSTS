@@ -19,6 +19,7 @@ fn main() -> eframe::Result {
             })
             .with_transparent(true)
             .with_maximize_button(false)
+            .with_resizable(false)
             .with_inner_size([385.0, 360.0])
             .with_min_inner_size([320.0, 330.0]),
         ..Default::default()
